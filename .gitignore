@@ -1,2 +1,3 @@
 docs/*.pdf
 climate-project/data/
+.DS_Store
