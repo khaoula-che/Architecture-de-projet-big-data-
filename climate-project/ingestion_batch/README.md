@@ -41,6 +41,26 @@ python3 climate-project/ingestion_batch/extract_api.py
 python3 climate-project/ingestion_batch/load_bronze.py
 ```
 
+## Lancer avec Docker (recommandé pour l'équipe)
+
+Seul **Docker Desktop** est nécessaire : l'image contient Java 17, Python 3.12 et PySpark 4.1.1. Les fichiers `Dockerfile`, `docker-compose.yml` et `.dockerignore` sont à la racine du dépôt. Toutes les commandes se lancent **depuis la racine**.
+
+```bash
+# Construire l'image (la première fois : quelques minutes)
+docker compose build
+
+# Lancer l'ingestion dans le conteneur
+docker compose run --rm ingestion python3 climate-project/ingestion_batch/extract_api.py
+docker compose run --rm ingestion python3 climate-project/ingestion_batch/load_bronze.py
+
+# Voir la Spark UI pendant l'exécution (http://localhost:4040)
+docker compose run --rm --service-ports ingestion python3 climate-project/ingestion_batch/load_bronze.py
+```
+
+Le dossier du projet est **partagé** avec le conteneur : le code est lu depuis le disque local, et `climate-project/data/` y est écrit. Il n'est pas nécessaire de reconstruire l'image après une modification du code, seulement après une modification de `requirements.txt`.
+
+> Le fichier `climate-project/docker-compose.yml` correspond à l'ancienne ingestion Kafka (branche `ingestion`). Il n'est pas utilisé ici.
+
 ## Rejeu et reconstruction
 
 | Action | Commande | Résultat attendu |

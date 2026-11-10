@@ -1,0 +1,16 @@
+# Lancer l'ingestion dans le même environnement pour toute l'équipe.
+# Exemples (depuis la racine du dépôt) :
+#   docker compose run --rm ingestion python3 climate-project/ingestion_batch/extract_api.py
+#   docker compose run --rm ingestion python3 climate-project/ingestion_batch/load_bronze.py
+# Pour voir la Spark UI (http://localhost:4040), ajouter --service-ports après "run".
+
+services:
+  ingestion:
+    build: .                        # construit l'image à partir du Dockerfile de la racine
+    image: climat-ingestion:0.1     # nom et version donnés à l'image
+    working_dir: /projet            # dossier de travail dans le conteneur
+    volumes:
+      - ./:/projet                  # partage le dossier du projet (code + data) avec le conteneur
+    ports:
+      - "4040:4040"                 # Spark UI
+    

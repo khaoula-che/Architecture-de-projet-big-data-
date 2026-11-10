@@ -1,0 +1,7 @@
+# Ce que Docker n'a pas besoin de recevoir pour construire l'image
+climate-project/data/
+.git/
+.vscode/
+docs/
+**/__pycache__/
+**/.DS_Store
