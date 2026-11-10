@@ -1,0 +1,35 @@
+# Configuration de l'ingestion par batchs (couche Bronze)
+# Périmètre de TEST : 10 stations x 3 années complètes = 30 batchs
+
+source: climato                      # nom de la source, écrit dans la colonne _source
+
+api:
+  base_url: https://climato.chom.engineering
+  timeout_s: 60                      # temps d'attente max d'une réponse (secondes)
+  tentatives: 3                      # nombre d'essais si l'API répond 503
+  pause_s: 2                         # pause entre deux essais (secondes)
+
+# Identifiants entre guillemets : sinon "07015" deviendrait le nombre 7015
+stations:
+  - "07015"   # Lille-Lesquin
+  - "07110"   # Brest-Guipavas
+  - "07156"   # Paris-Montsouris
+  - "07190"   # Strasbourg-Entzheim
+  - "07480"   # Lyon-Bron
+  - "07486"   # Grenoble-St Geoirs
+  - "07510"   # Bordeaux-Mérignac
+  - "07630"   # Toulouse-Blagnac
+  - "07650"   # Marseille-Marignane
+  - "07690"   # Nice - Côte d'Azur
+
+# La date de fin est EXCLUE par l'API : une année = du 01/01 au 01/01 suivant
+periodes:
+  - { debut: "2003-01-01", fin: "2004-01-01" }
+  - { debut: "2019-01-01", fin: "2020-01-01" }
+  - { debut: "2022-01-01", fin: "2023-01-01" }
+
+# Chemins relatifs au dossier climate-project/
+chemins:
+  raw: data/raw                      # zone brute : réponses de l'API, jamais modifiées
+  bronze: data/bronze                # table Bronze (Parquet)
+  batch_log: data/_meta/batch_log.csv
