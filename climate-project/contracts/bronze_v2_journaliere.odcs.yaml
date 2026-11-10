@@ -1,0 +1,164 @@
+# =====================================================================
+# Contrat de données : table Bronze des mesures journalières (API v2)
+# Format : ODCS v3 (Open Data Contract Standard), recommandé par le prof
+# En français : voir l'exemple de l'étape 34. Ce fichier dit la même chose,
+# dans un format standard lisible par un humain ET par un programme.
+# =====================================================================
+
+apiVersion: v3.0.2
+kind: DataContract
+id: bronze-v2-journaliere
+name: Bronze - mesures journalieres v2
+version: 1.0.0                  # à augmenter si la table change
+status: active
+domain: climat
+dataProduct: extremes-climatiques-france
+
+# ---------- À quoi sert cette table ----------
+description:
+  purpose: >
+    Conserver fidèlement les mesures journalières renvoyées par l'API climato
+    (/v2/journaliere), une ligne par jour et par station, avec leur provenance.
+  usage: >
+    Source unique de la couche Silver. Permet de reconstruire Silver et Gold
+    sans rappeler l'API.
+  limitations: >
+    Aucune valeur n'est contrôlée ni convertie : tous les champs de l'API sont
+    en texte. Pas de dédoublonnage : si deux batchs se recouvraient, un même
+    (ic_id, date) pourrait apparaître deux fois. Contrôles et dédoublonnage
+    sont faits en Silver. Périmètre actuel : TEST (10 stations, 2003/2019/2022).
+
+# ---------- Description de la table et de ses colonnes ----------
+schema:
+  - name: bronze_v2_journaliere
+    physicalName: climate-project/data/bronze/v2_journaliere
+    physicalType: table
+    description: Mesures journalières brutes, une ligne par jour de mesure reçu de l'API.
+    dataGranularityDescription: >
+      Une ligne = une mesure journalière d'une station, telle que renvoyée par
+      l'API, dans un batch donné (1 batch = 1 station x 1 période).
+
+    properties:
+      # --- Clé technique : rend chaque ligne unique ---
+      - name: _batch_id
+        logicalType: string
+        required: true
+        primaryKey: true
+        primaryKeyPosition: 1
+        partitioned: true
+        partitionKeyPosition: 1
+        description: "Batch d'origine (partition). Format v2j_<station>_<debut>_<fin>, fin exclue. Ex. v2j_07486_2003-01-01_2004-01-01"
+      - name: _ligne
+        logicalType: integer
+        required: true
+        primaryKey: true
+        primaryKeyPosition: 2
+        description: "Position de la mesure dans le fichier du batch (1, 2, 3...). Ex. 224 = 12 août pour une année commençant le 1er janvier"
+
+      # --- Champs de l'API, gardés EN TEXTE et sans modification ---
+      - name: ic_id
+        logicalType: string
+        description: "Identifiant Infoclimat de la station. Ex. 07486 (Grenoble-St Geoirs)"
+      - name: mfid
+        logicalType: string
+        description: "Identifiant Météo-France de la station. Ex. 38384001"
+      - name: date
+        logicalType: string
+        description: "Jour de la mesure, format AAAA-MM-JJ. Bornes horaires de la journée : voir questionsOuvertes"
+      - name: tx
+        logicalType: string
+        description: "Température maximale du jour, en °C (texte). Ex. 38.6"
+      - name: tn
+        logicalType: string
+        description: "Température minimale du jour, en °C (texte). Ex. 17.4"
+      - name: tm
+        logicalType: string
+        description: "Température moyenne du jour, en °C (texte)"
+      - name: tntxm
+        logicalType: string
+        description: "Moyenne de tn et tx, en °C (texte)"
+      - name: rr
+        logicalType: string
+        description: "Cumul de pluie du jour, en mm (texte). Absence de valeur ≠ 0 mm"
+      - name: n_obs
+        logicalType: string
+        description: "Nombre d'observations utilisées pour calculer la journée (texte). Ex. 48"
+      - name: n_obs_rejetees
+        logicalType: string
+        description: "Nombre d'observations rejetées par l'API (texte)"
+      - name: statut_extremes
+        logicalType: string
+        description: "Statut du calcul des extrêmes renvoyé par l'API. Valeur observée : quotidien (signification exacte à confirmer)"
+
+      # --- Colonnes techniques de provenance (ajoutées par load_bronze.py) ---
+      - name: _source
+        logicalType: string
+        required: true
+        description: "Fournisseur. Toujours : climato"
+      - name: _endpoint
+        logicalType: string
+        required: true
+        description: "Guichet de l'API. Toujours : v2_journaliere"
+      - name: _fichier
+        logicalType: string
+        required: true
+        description: "Chemin complet du fichier JSON brut d'origine (zone brute)"
+      - name: _checksum
+        logicalType: string
+        required: true
+        description: "Empreinte SHA-256 du batch, identique à celle du batch log"
+      - name: _ingere_le
+        logicalType: date
+        physicalType: timestamp
+        required: true
+        description: "Date et heure UTC du chargement dans Bronze"
+
+    # ---------- Règles de qualité (vérifiables automatiquement) ----------
+    quality:
+      - name: etiquettes_presentes
+        type: sql
+        description: "Aucune étiquette de provenance vide"
+        query: >
+          SELECT COUNT(*) FROM bronze_v2_journaliere
+          WHERE _batch_id IS NULL OR _ligne IS NULL OR _checksum IS NULL
+             OR _fichier IS NULL OR _ingere_le IS NULL
+        mustBe: 0
+      - name: cle_unique
+        type: sql
+        description: "Pas deux lignes avec le même (_batch_id, _ligne)"
+        query: >
+          SELECT COUNT(*) FROM (
+            SELECT _batch_id, _ligne FROM bronze_v2_journaliere
+            GROUP BY _batch_id, _ligne HAVING COUNT(*) > 1)
+        mustBe: 0
+      - name: reconciliation
+        type: text
+        description: >
+          Pour chaque batch : nombre de lignes en Bronze = nb_lignes du batch log
+          (data/_meta/batch_log.csv). Vérifié par load_bronze.py ; sinon le batch
+          passe en ECHEC.
+
+# ---------- Où lire les données ----------
+servers:
+  - server: local
+    type: local
+    format: parquet
+    path: climate-project/data/bronze/v2_journaliere/**/*.parquet
+    description: "Stockage local (test). Plus tard : stockage objet S3 de l'école"
+
+# ---------- Qui est responsable ----------
+team:
+  - username: equipe-extremes-climatiques
+    role: owner
+
+# ---------- Informations complémentaires ----------
+customProperties:
+  - property: producteur
+    value: climate-project/ingestion_batch/load_bronze.py
+  - property: source
+    value: "https://climato.chom.engineering/v2/journaliere (Licence Ouverte 2.0, attribution Météo-France / Infoclimat)"
+  - property: questionsOuvertes
+    value: >
+      Bornes horaires de la « journée » de l'API (0h-24h ou jour climatologique
+      6h-6h UTC ?). Signification exacte de statut_extremes. À vérifier dans la
+      documentation du portail ou auprès du professeur.
