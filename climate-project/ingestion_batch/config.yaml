@@ -33,3 +33,12 @@ chemins:
   raw: data/raw                      # zone brute : réponses de l'API, jamais modifiées
   bronze: data/bronze                # table Bronze (Parquet)
   batch_log: data/_meta/batch_log.csv
+  silver: data/silver
+  rapport_silver: data/_meta/rapport_qualite_silver.csv
+
+
+# Seuils de qualité du Silver
+qualite:
+  temp_min: -50          # en dessous : température impossible -> INVALIDE
+  temp_max: 55           # au-dessus : température impossible -> INVALIDE
+  pluie_suspecte: 500    # au-dessus (mm en un jour) : à vérifier -> SUSPECT
