@@ -1,0 +1,227 @@
+# =====================================================================
+# Contrat de données : table Silver des observations journalières
+# Format : ODCS v3 (Open Data Contract Standard)
+# Consommateur principal : la couche Gold (catalogue des extrêmes)
+# =====================================================================
+
+apiVersion: v3.0.2
+kind: DataContract
+id: silver-observations-jour
+name: Silver - observations journalieres
+version: 1.0.0
+status: active
+domain: climat
+dataProduct: extremes-climatiques-france
+
+description:
+  purpose: >
+    Fournir des observations journalières harmonisées, typées, contrôlées et
+    dédoublonnées : une ligne par station et par jour, prête pour le Gold.
+  usage: >
+    Source du Gold (épisodes de chaleur, de froid, fortes pluies, records).
+    Filtrer sur qc_tx / qc_tn / qc_rr = 'OK' (et éventuellement 'SUSPECT')
+    pour les calculs.
+  limitations: >
+    Format LARGE retenu, car le produit Gold (épisodes extrêmes) exploite
+    tx, tn et rr conjointement par station et par jour. Le format long,
+    proposé dans le cours, est mieux adapté à un catalogue de nombreuses
+    variables hétérogènes, ce qui n'est pas notre cas (3 variables).
+    Point faible : si l'on ajoute beaucoup de mesures (vent, pression,
+    neige...), le format long deviendra plus intéressant.
+    Périmètre actuel : TEST (10 stations, années 2003, 2019, 2022).
+
+schema:
+  # -------------------- Table principale --------------------
+  - name: silver_observations_jour
+    physicalName: climate-project/data/silver/observations_jour
+    physicalType: table
+    description: Observations journalières nettoyées, une ligne par station et par jour.
+    dataGranularityDescription: "Une ligne = une station x un jour (format large)."
+
+    properties:
+      # --- Clé : une seule ligne par station et par jour ---
+      - name: station_id
+        logicalType: string
+        required: true
+        primaryKey: true
+        primaryKeyPosition: 1
+        description: "Identifiant Infoclimat de la station (ic_id). Ex. 07486. Existe dans le référentiel (Q6)."
+      - name: date
+        logicalType: date
+        required: true
+        primaryKey: true
+        primaryKeyPosition: 2
+        description: "Jour de la mesure. Bornes horaires de la journée : voir questionsOuvertes."
+
+      # --- Mesures (nombres) et leur contrôle qualité ---
+      - name: tx
+        logicalType: number
+        physicalType: double
+        description: "Température maximale du jour, en °C. NULL si absente ou non convertible."
+      - name: qc_tx
+        logicalType: string
+        required: true
+        description: "Qualité de tx : OK, SUSPECT, INVALIDE ou ABSENT."
+      - name: tn
+        logicalType: number
+        physicalType: double
+        description: "Température minimale du jour, en °C."
+      - name: qc_tn
+        logicalType: string
+        required: true
+        description: "Qualité de tn : OK, SUSPECT, INVALIDE ou ABSENT."
+      - name: tm
+        logicalType: number
+        physicalType: double
+        description: "Température moyenne du jour, en °C (non contrôlée)."
+      - name: rr
+        logicalType: number
+        physicalType: double
+        description: "Cumul de pluie du jour, en mm. NULL = pas de mesure (jamais remplacé par 0)."
+      - name: qc_rr
+        logicalType: string
+        required: true
+        description: "Qualité de rr : OK, SUSPECT, INVALIDE ou ABSENT."
+
+      # --- Infos de l'API ---
+      - name: n_obs
+        logicalType: integer
+        description: "Nombre d'observations utilisées pour la journée."
+      - name: n_obs_rejetees
+        logicalType: integer
+        description: "Nombre d'observations rejetées par l'API."
+      - name: mfid
+        logicalType: string
+        description: "Identifiant Météo-France de la station."
+
+      # --- Infos de la station (jointure avec le référentiel) ---
+      - name: nom_station
+        logicalType: string
+        description: "Nom de la station. Ex. Grenoble-St Geoirs"
+      - name: departement
+        logicalType: string
+        description: "Numéro de département. Ex. 38"
+      - name: latitude
+        logicalType: number
+        description: "Latitude (degrés décimaux)."
+      - name: longitude
+        logicalType: number
+        description: "Longitude (degrés décimaux)."
+      - name: altitude
+        logicalType: number
+        description: "Altitude en mètres."
+
+      # --- Provenance ---
+      - name: _batch_id
+        logicalType: string
+        required: true
+        description: "Batch Bronze d'origine de la ligne retenue."
+      - name: _source
+        logicalType: string
+        required: true
+        description: "Fournisseur. Toujours : climato"
+      - name: _traite_le
+        logicalType: date
+        physicalType: timestamp
+        required: true
+        description: "Date et heure UTC du traitement Silver."
+
+      # --- Rangement ---
+      - name: annee
+        logicalType: integer
+        partitioned: true
+        partitionKeyPosition: 1
+        description: "Année de date (partition)."
+      - name: mois
+        logicalType: integer
+        partitioned: true
+        partitionKeyPosition: 2
+        description: "Mois de date (partition)."
+
+    quality:
+      - name: cle_unique
+        type: sql
+        description: "Une seule ligne par (station_id, date)"
+        query: >
+          SELECT COUNT(*) FROM (
+            SELECT station_id, date FROM silver_observations_jour
+            GROUP BY station_id, date HAVING COUNT(*) > 1)
+        mustBe: 0
+      - name: valeurs_qc_autorisees
+        type: sql
+        description: "Les qc ne prennent que les 4 valeurs prévues"
+        query: >
+          SELECT COUNT(*) FROM silver_observations_jour
+          WHERE qc_tx NOT IN ('OK','SUSPECT','INVALIDE','ABSENT')
+             OR qc_tn NOT IN ('OK','SUSPECT','INVALIDE','ABSENT')
+             OR qc_rr NOT IN ('OK','SUSPECT','INVALIDE','ABSENT')
+        mustBe: 0
+      - name: q1_temperatures_ok_dans_la_plage
+        type: sql
+        description: "Q1 : une température marquée OK est dans [-50 ; 55] °C"
+        query: >
+          SELECT COUNT(*) FROM silver_observations_jour
+          WHERE (qc_tx = 'OK' AND (tx < -50 OR tx > 55))
+             OR (qc_tn = 'OK' AND (tn < -50 OR tn > 55))
+        mustBe: 0
+      - name: q2_tn_inferieure_a_tx
+        type: sql
+        description: "Q2 : si tx et tn sont OK, alors tn <= tx"
+        query: >
+          SELECT COUNT(*) FROM silver_observations_jour
+          WHERE qc_tx = 'OK' AND qc_tn = 'OK' AND tn > tx
+        mustBe: 0
+      - name: absence_different_de_zero
+        type: sql
+        description: "Une pluie ABSENT reste NULL (jamais 0)"
+        query: >
+          SELECT COUNT(*) FROM silver_observations_jour
+          WHERE qc_rr = 'ABSENT' AND rr IS NOT NULL
+        mustBe: 0
+      - name: reconciliation
+        type: text
+        description: >
+          Pour chaque batch : lignes Bronze = lignes Silver + doublons écartés
+          + lignes en quarantaine. Vérifié par build_silver.py et enregistré
+          dans data/_meta/rapport_qualite_silver.csv (statut PUBLIE ou ECHEC).
+
+  # -------------------- Table de quarantaine --------------------
+  - name: silver_quarantaine
+    physicalName: climate-project/data/silver/quarantaine
+    physicalType: table
+    description: >
+      Lignes du Bronze inutilisables (problème sur toute la ligne), conservées
+      avec la règle violée pour revue et rejeu. Mêmes colonnes que le Bronze
+      (en texte) + motif + _traite_le. Partitionnée par _batch_id.
+    properties:
+      - name: motif
+        logicalType: string
+        required: true
+        description: >
+          Règle violée : « Q3 date illisible », « Q3 date hors periode du batch »
+          ou « Q6 station inconnue du referentiel ».
+
+servers:
+  - server: local
+    type: local
+    format: parquet
+    path: climate-project/data/silver/observations_jour/**/*.parquet
+    description: "Stockage local (test). Plus tard : stockage objet S3 de l'école"
+
+team:
+  - username: equipe-extremes-climatiques
+    role: owner
+
+customProperties:
+  - property: producteur
+    value: climate-project/silver/build_silver.py
+  - property: dependances
+    value: "Bronze v2_journaliere (contrat bronze-v2-journaliere) + Bronze ref_stations (dernière version)"
+  - property: seuils
+    value: "Définis dans config.yaml (section qualite) : temp_min -50, temp_max 55, pluie_suspecte 500 mm"
+  - property: tests
+    value: "climate-project/tests/test_silver_qualite.py (11 tests : Q1, Q2, Q3, Q6, absence, doublon, quarantaine, bilan)"
+  - property: questionsOuvertes
+    value: >
+      Bornes horaires de la « journée » de l'API (0h-24h ou jour climatologique
+      6h-6h UTC ?) : à confirmer avec le professeur.
