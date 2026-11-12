@@ -92,7 +92,8 @@ def main():
     bilan = {"CHARGE": 0, "ECHEC": 0}
 
     for endpoint, deplier in (("v2_journaliere", mesures_journalieres),
-                              ("ref_stations", stations)):
+                              ("ref_stations", stations),
+                              ("v2_records", mesures_journalieres)):  # meme format : une liste "mesures"
         batchs = [b for b in a_charger if b["endpoint"] == endpoint]
         if not batchs:
             continue
