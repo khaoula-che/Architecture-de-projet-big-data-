@@ -181,6 +181,16 @@ def main():
             bilan[r] += 1
             if r == "RECU":
                 time.sleep(0.5)        # rester raisonnable avec l'API
+    
+    # 3. Records de l'API (/v2/records) : un batch par station et par jour d'extraction.
+    #    Reference de validation pour le Gold (records mensuels sur toute l'histoire).
+    for s in CONFIG["stations"]:
+        batch_id = f"v2r_{s}_{jour}"
+        r = traiter(log, batch_id, "v2_records", "/v2/records", {"station": s},
+                    station=s, pagine=False)
+        bilan[r] += 1
+        if r == "RECU":
+            time.sleep(0.5)
 
     print(f"\nBilan : {bilan['RECU']} recu(s), {bilan['IGNORE']} ignore(s), {bilan['ECHEC']} echec(s)")
     sys.exit(1 if bilan["ECHEC"] else 0)
