@@ -8,7 +8,7 @@ apiVersion: v3.0.2
 kind: DataContract
 id: silver-observations-jour
 name: Silver - observations journalieres
-version: 1.0.0
+version: 1.1.0
 status: active
 domain: climat
 dataProduct: extremes-climatiques-france
@@ -116,6 +116,10 @@ schema:
         logicalType: string
         required: true
         description: "Batch Bronze d'origine de la ligne retenue."
+      - name: _ligne
+        logicalType: integer
+        required: true
+        description: "Position de la ligne retenue dans son batch Bronze (traçabilité exacte)."
       - name: _source
         logicalType: string
         required: true
