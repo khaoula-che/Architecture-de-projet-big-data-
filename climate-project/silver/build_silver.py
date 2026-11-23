@@ -6,6 +6,11 @@ de qualite (qc_tx, qc_tn, qc_rr), infos de la station (referentiel),
 dedoublonnage, quarantaine des lignes inutilisables, rangement par annee/mois,
 et bilan par batch : Bronze = Silver + doublons + quarantaine.
 
+Traitement incremental (donnees en retard, corrections) :
+  - le Silver est recalcule seulement pour les MOIS touches par les nouveaux batchs ;
+  - la quarantaine et le bilan sont recalcules sur la TOTALITE des batchs concernes
+    (nouveaux batchs + batchs deja presents dans ces mois).
+
 Usage (depuis la racine du depot) :
   python3 climate-project/silver/build_silver.py          # nouveaux batchs seulement
   python3 climate-project/silver/build_silver.py --tout   # reconstruit tout le Silver
@@ -48,7 +53,7 @@ def ecrire_rapport(rapport):
     RAPPORT.parent.mkdir(parents=True, exist_ok=True)
     tmp = RAPPORT.with_suffix(".tmp")
     with open(tmp, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=COLONNES_RAPPORT)
+        w = csv.DictWriter(f, fieldnames=COLONNES_RAPPORT, extrasaction="ignore")
         w.writeheader()
         for l in sorted(rapport.values(), key=lambda x: x["batch_id"]):
             w.writerow(l)
@@ -94,6 +99,25 @@ def referentiel(spark):
                        F.col("altitude").cast("double").alias("altitude")))
 
 
+# ---------- Etapes B + D : preparer les lignes (date, periode, station, motif) ----------
+def preparer(df, ref):
+    """Ajoute la date, la periode du batch, les infos de la station et le motif
+    de quarantaine (NULL si la ligne est utilisable)."""
+    df = (df.withColumn("d", F.to_date("date", "yyyy-MM-dd"))
+            # periode du batch, lue dans son nom v2j_<station>_<debut>_<fin> (pour Q3)
+            .withColumn("p_debut", F.to_date(F.regexp_extract(
+                "_batch_id", r"_(\d{4}-\d{2}-\d{2})_\d{4}-\d{2}-\d{2}$", 1)))
+            .withColumn("p_fin", F.to_date(F.regexp_extract(
+                "_batch_id", r"_(\d{4}-\d{2}-\d{2})$", 1))))
+    # left join : on garde les stations inconnues pour pouvoir les detecter (Q6)
+    df = df.join(F.broadcast(ref), df.ic_id == ref.station_id, "left")
+    motif = (F.when(F.col("d").isNull(), "Q3 date illisible")
+              .when((F.col("d") < F.col("p_debut")) | (F.col("d") >= F.col("p_fin")),
+                    "Q3 date hors periode du batch")
+              .when(F.col("station_id").isNull(), "Q6 station inconnue du referentiel"))
+    return df.withColumn("motif", motif)
+
+
 # ---------- Etape E : le controle de qualite d'une mesure ----------
 def qc(m):
     """ABSENT / INVALIDE / SUSPECT / OK, dans cet ordre (premiere regle vraie)."""
@@ -123,44 +147,36 @@ def main():
         shutil.rmtree(SILVER, ignore_errors=True)   # reconstruction complete depuis Bronze
 
     spark = creer_spark()
-    bronze = (spark.read.parquet(str(BRONZE / "v2_journaliere"))
-                   .withColumn("d", F.to_date("date", "yyyy-MM-dd")))
-    colonnes_bronze = [c for c in bronze.columns if c != "d"]
-
-    # Etape C : mois touches par les nouveaux batchs -> on recalcule ces mois en entier
-    mois = (bronze.where(F.col("_batch_id").isin(nouveaux)).where(F.col("d").isNotNull())
-                  .select(F.year("d").alias("a"), F.month("d").alias("m")).distinct())
-    lignes = (bronze.join(F.broadcast(mois),
-                          (F.year("d") == mois.a) & (F.month("d") == mois.m), "left_semi")
-                    .unionByName(bronze.where(F.col("_batch_id").isin(nouveaux)))
-                    .dropDuplicates(["_batch_id", "_ligne"]))
-
-    # Periode du batch, lue dans son nom v2j_<station>_<debut>_<fin> (pour Q3)
-    lignes = (lignes
-        .withColumn("p_debut", F.to_date(F.regexp_extract(
-            "_batch_id", r"_(\d{4}-\d{2}-\d{2})_\d{4}-\d{2}-\d{2}$", 1)))
-        .withColumn("p_fin", F.to_date(F.regexp_extract(
-            "_batch_id", r"_(\d{4}-\d{2}-\d{2})$", 1))))
-
-    # Etape B : jointure avec le referentiel (left : on garde les stations inconnues pour Q6)
     ref = referentiel(spark)
-    lignes = lignes.join(F.broadcast(ref), lignes.ic_id == ref.station_id, "left")
+    bronze = spark.read.parquet(str(BRONZE / "v2_journaliere"))
+    colonnes_bronze = bronze.columns
+    jour = F.to_date("date", "yyyy-MM-dd")
 
-    # Etape D : quarantaine = probleme sur TOUTE la ligne
-    motif = (F.when(F.col("d").isNull(), "Q3 date illisible")
-              .when((F.col("d") < F.col("p_debut")) | (F.col("d") >= F.col("p_fin")),
-                    "Q3 date hors periode du batch")
-              .when(F.col("station_id").isNull(), "Q6 station inconnue du referentiel"))
-    lignes = lignes.withColumn("motif", motif).cache()
-    quarantaine = lignes.where(F.col("motif").isNotNull())
-    valides = lignes.where(F.col("motif").isNull())
+    # Etape C : mois touches par les nouveaux batchs
+    mois = (bronze.where(F.col("_batch_id").isin(nouveaux))
+                  .select(F.year(jour).alias("a"), F.month(jour).alias("m"))
+                  .where(F.col("a").isNotNull()).distinct())
+    # Batchs concernes = les nouveaux + ceux qui ont des lignes dans ces mois
+    dans_les_mois = bronze.join(F.broadcast(mois),
+                                (F.year(jour) == mois.a) & (F.month(jour) == mois.m),
+                                "left_semi")
+    lot = sorted(set(nouveaux)
+                 | {r[0] for r in dans_les_mois.select("_batch_id").distinct().collect()})
+
+    # Toutes les lignes (tous les mois) des batchs concernes, preparees
+    tous = preparer(bronze.where(F.col("_batch_id").isin(lot)), ref).cache()
+    # Les lignes a recalculer dans le Silver : celles des mois touches
+    a_recalculer = tous.join(F.broadcast(mois),
+                             (F.year("d") == mois.a) & (F.month("d") == mois.m), "left_semi")
+
+    # Etape D : quarantaine = probleme sur TOUTE la ligne, sur les batchs ENTIERS
+    quarantaine = tous.where(F.col("motif").isNotNull())
 
     # Etape F : dedoublonnage, une ligne par (station, jour), la plus recente gagne
     w = Window.partitionBy("station_id", "d").orderBy(
         F.col("_ingere_le").desc(), F.col("_batch_id").desc(), F.col("_ligne").asc())
-    valides = valides.withColumn("_rang", F.row_number().over(w))
-    gardees = valides.where("_rang = 1")
-    doublons = valides.where("_rang > 1")
+    gardees = (a_recalculer.where(F.col("motif").isNull())
+                           .withColumn("_rang", F.row_number().over(w)).where("_rang = 1"))
 
     # Etape E : controles de qualite par mesure, puis Q2 (tn > tx -> les deux INVALIDE)
     silver = gardees
@@ -182,35 +198,56 @@ def main():
         F.col("n_obs").cast("int").alias("n_obs"),
         F.col("n_obs_rejetees").cast("int").alias("n_obs_rejetees"),
         "mfid", "nom_station", "departement", "latitude", "longitude", "altitude",
-        "_batch_id", "_source", F.current_timestamp().alias("_traite_le"),
+        "_batch_id", "_ligne", "_source", F.current_timestamp().alias("_traite_le"),
         F.year("d").alias("annee"), F.month("d").alias("mois"))
 
-    # Etape G : ecriture, rangee par annee/mois et triee par station et date
+    # Etape G : ecriture du Silver (seulement les mois touches sont remplaces)
     (silver.repartition("annee", "mois")
            .sortWithinPartitions("station_id", "date")
            .write.mode("overwrite").partitionBy("annee", "mois")
            .parquet(str(SILVER / "observations_jour")))
+    # Quarantaine : on remplace ENTIEREMENT celle des batchs concernes
+    for b in lot:
+        shutil.rmtree(SILVER / "quarantaine" / f"_batch_id={b}", ignore_errors=True)
     (quarantaine.select(*colonnes_bronze, "motif", F.current_timestamp().alias("_traite_le"))
                 .write.mode("overwrite").partitionBy("_batch_id")
                 .parquet(str(SILVER / "quarantaine")))
 
-    # Etape H : bilan par batch (relecture du Silver ecrit)
-    lot = sorted(r[0] for r in lignes.select("_batch_id").distinct().collect())
-    ecrit = (spark.read.parquet(str(SILVER / "observations_jour"))
-                  .where(F.col("_batch_id").isin(lot)))
-    n_bronze, n_doublons, n_quar = compter(lignes), compter(doublons), compter(quarantaine)
-    n_silver = compter(ecrit)
+    # Etape H : bilan par batch ENTIER, en suivant chaque ligne du Bronze
+    #   silver  : c'est cette ligne exacte (batch + numero) qui est dans le Silver
+    #   doublon : le Silver contient ce jour, mais venant d'une autre ligne
+    #   perdue  : ce jour n'est pas dans le Silver (ne doit jamais arriver)
+    silver_ecrit = (spark.read.option("mergeSchema", "true")
+                         .parquet(str(SILVER / "observations_jour")))
+    garde = silver_ecrit.select(F.col("station_id").alias("k_station"),
+                                F.col("date").alias("k_date"),
+                                F.col("_batch_id").alias("g_batch"),
+                                F.col("_ligne").alias("g_ligne"))
+    valides = tous.where(F.col("motif").isNull()).select(
+        "_batch_id", "_ligne", F.col("station_id").alias("k_station"),
+        F.col("d").alias("k_date"))
+    devenir = (valides.join(garde, ["k_station", "k_date"], "left")
+        .withColumn("devenir",
+                    F.when(F.col("g_batch").isNull(), "perdue")
+                     .when((F.col("g_batch") == F.col("_batch_id"))
+                           & (F.col("g_ligne") == F.col("_ligne")), "silver")
+                     .otherwise("doublon")))
+    n_dev = {(r["_batch_id"], r["devenir"]): r["count"]
+             for r in devenir.groupBy("_batch_id", "devenir").count().collect()}
+    n_bronze, n_quar = compter(tous), compter(quarantaine)
     n_qc = {}
+    ecrit_lot = silver_ecrit.where(F.col("_batch_id").isin(lot))
     for m in MESURES_QC:
-        for r in ecrit.groupBy("_batch_id", f"qc_{m}").count().collect():
+        for r in ecrit_lot.groupBy("_batch_id", f"qc_{m}").count().collect():
             n_qc[(r["_batch_id"], m, r[f"qc_{m}"].lower())] = r["count"]
 
     rapport = {} if tout else lire_rapport()
     bilan = {"PUBLIE": 0, "ECHEC": 0}
     for b in lot:
-        nb, ns = n_bronze.get(b, 0), n_silver.get(b, 0)
-        nd, nq = n_doublons.get(b, 0), n_quar.get(b, 0)
-        statut = "PUBLIE" if nb == ns + nd + nq else "ECHEC"
+        nb, nq = n_bronze.get(b, 0), n_quar.get(b, 0)
+        ns, nd = n_dev.get((b, "silver"), 0), n_dev.get((b, "doublon"), 0)
+        npe = n_dev.get((b, "perdue"), 0)
+        statut = "PUBLIE" if (nb == ns + nd + nq and npe == 0) else "ECHEC"
         ligne = {"batch_id": b, "lignes_bronze": nb, "lignes_silver": ns,
                  "doublons": nd, "quarantaine": nq, "statut": statut, "maj_le": maintenant()}
         for m in MESURES_QC:
@@ -218,7 +255,8 @@ def main():
                 ligne[f"{m}_{e}"] = n_qc.get((b, m, e), 0)
         rapport[b] = ligne
         bilan[statut] += 1
-        print(f"{statut:<7} {b}  bronze={nb} silver={ns} doublons={nd} quarantaine={nq}")
+        print(f"{statut:<7} {b}  bronze={nb} silver={ns} doublons={nd} "
+              f"quarantaine={nq} perdues={npe}")
     ecrire_rapport(rapport)
 
     spark.stop()
