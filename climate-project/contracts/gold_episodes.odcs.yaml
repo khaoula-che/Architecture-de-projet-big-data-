@@ -1,0 +1,215 @@
+# =====================================================================
+# Contrat de données : couche Gold (catalogue des épisodes extrêmes,
+# records par station, validation avec /v2/records)
+# Format : ODCS v3
+# Consommateurs : l'IA (regroupement / détection d'épisodes atypiques),
+#                 le dossier d'architecture, la soutenance
+# =====================================================================
+
+apiVersion: v3.0.2
+kind: DataContract
+id: gold-episodes-extremes
+name: Gold - episodes extremes, records et validation
+version: 1.0.0
+status: active
+domain: climat
+dataProduct: extremes-climatiques-france
+
+description:
+  purpose: >
+    Catalogue des épisodes extrêmes (canicules, vagues de froid, fortes pluies)
+    détectés dans le Silver, records par station et par mois, et preuve de
+    correction par comparaison avec les records de l'API (/v2/records).
+  usage: >
+    Base de l'usage IA et des analyses. Chaque épisode indique la méthode et le
+    seuil utilisés, le nombre de jours manquants tolérés et la présence de
+    valeurs SUSPECT.
+  limitations: >
+    Méthode A (seuils fixes nationaux) : tx >= 35 °C au moins 3 jours (canicule),
+    tn <= -5 °C au moins 3 jours (vague de froid), rr >= 50 mm (fortes pluies,
+    1 jour suffit). Un seuil fixe n'a pas le même sens dans tous les climats :
+    passage prévu à la méthode B (seuils propres à chaque station) puis
+    comparaison à la méthode C (Météo-France, canicule). Tolérance d'un jour
+    manquant (D21) provisoire. Les épisodes aux bords des périodes chargées
+    peuvent être tronqués (années non contiguës : 2003, 2019, 2022).
+    Périmètre actuel : TEST (10 stations). Gold recalculé en entier à chaque
+    exécution (incrémental à venir).
+
+schema:
+  # -------------------- 1. Catalogue des épisodes --------------------
+  - name: gold_episodes
+    physicalName: climate-project/data/gold/episodes
+    physicalType: table
+    description: Une ligne par épisode extrême détecté.
+    dataGranularityDescription: "Une ligne = un épisode (une station, un type, une période continue)."
+    properties:
+      - name: episode_id
+        logicalType: string
+        required: true
+        primaryKey: true
+        description: "station_id + type + date_debut. Ex. 07480_canicule_2003-08-03"
+      - name: station_id
+        logicalType: string
+        required: true
+        description: "Identifiant de la station (ic_id)."
+      - name: nom_station
+        logicalType: string
+        description: "Nom de la station."
+      - name: departement
+        logicalType: string
+      - name: latitude
+        logicalType: number
+      - name: longitude
+        logicalType: number
+      - name: type
+        logicalType: string
+        required: true
+        description: "canicule, vague_froid ou fortes_pluies"
+      - name: date_debut
+        logicalType: date
+        required: true
+        description: "Premier jour qui dépasse le seuil."
+      - name: date_fin
+        logicalType: date
+        required: true
+        description: "Dernier jour qui dépasse le seuil."
+      - name: duree_jours
+        logicalType: integer
+        required: true
+        description: "date_fin - date_debut + 1 (jours manquants tolérés compris)."
+      - name: nb_jours_seuil
+        logicalType: integer
+        required: true
+        description: "Jours qui dépassent réellement le seuil (>= 3 pour chaleur et froid)."
+      - name: nb_jours_manquants
+        logicalType: integer
+        required: true
+        description: "Jours ABSENT ou INVALIDE tolérés à l'intérieur de l'épisode (D21)."
+      - name: intensite
+        logicalType: number
+        description: "tx max (canicule, °C), tn min (vague de froid, °C), rr max (fortes pluies, mm)."
+      - name: moyenne
+        logicalType: number
+        description: "Moyenne de la mesure sur les jours qui dépassent le seuil."
+      - name: cumul_rr
+        logicalType: number
+        description: "Cumul de pluie de l'épisode en mm (fortes_pluies uniquement, sinon NULL)."
+      - name: contient_suspect
+        logicalType: boolean
+        required: true
+        description: "Vrai si au moins une valeur SUSPECT a été utilisée (D22)."
+      - name: methode
+        logicalType: string
+        required: true
+        description: "Méthode de détection. Actuellement : A_seuils_fixes"
+      - name: seuil
+        logicalType: number
+        required: true
+        description: "Seuil utilisé (°C ou mm)."
+      - name: annee
+        logicalType: integer
+        partitioned: true
+        partitionKeyPosition: 1
+        description: "Année de date_debut (partition)."
+    quality:
+      - name: identifiant_unique
+        type: sql
+        description: "Un seul épisode par episode_id"
+        query: >
+          SELECT COUNT(*) FROM (SELECT episode_id FROM gold_episodes
+          GROUP BY episode_id HAVING COUNT(*) > 1)
+        mustBe: 0
+      - name: duree_coherente
+        type: sql
+        description: "duree_jours = nb_jours_seuil + nb_jours_manquants, et date_fin >= date_debut"
+        query: >
+          SELECT COUNT(*) FROM gold_episodes
+          WHERE duree_jours <> nb_jours_seuil + nb_jours_manquants OR date_fin < date_debut
+        mustBe: 0
+      - name: duree_minimale
+        type: sql
+        description: "Au moins 3 jours au-dessus du seuil pour la chaleur et le froid"
+        query: >
+          SELECT COUNT(*) FROM gold_episodes
+          WHERE type IN ('canicule','vague_froid') AND nb_jours_seuil < 3
+        mustBe: 0
+
+  # -------------------- 2. Records par station --------------------
+  - name: gold_records_stations
+    physicalName: climate-project/data/gold/records_stations
+    physicalType: table
+    description: >
+      Nos records par station et par mois du calendrier, sur la période chargée
+      (valeurs OK ou SUSPECT uniquement). Même grain que /v2/records.
+    dataGranularityDescription: "Une ligne = une station x un mois du calendrier (1 à 12)."
+    properties:
+      - { name: station_id, logicalType: string, required: true, primaryKey: true, primaryKeyPosition: 1 }
+      - { name: mois_calendaire, logicalType: integer, required: true, primaryKey: true, primaryKeyPosition: 2 }
+      - { name: nom_station, logicalType: string }
+      - { name: n_jours, logicalType: integer, description: "Jours disponibles pour ce mois" }
+      - { name: annees_couvertes, logicalType: string, description: "Ex. 2003,2019,2022" }
+      - { name: tx_max, logicalType: number, description: "Jour le plus chaud (°C)" }
+      - { name: tx_max_date, logicalType: date }
+      - { name: tn_min, logicalType: number, description: "Nuit la plus froide (°C)" }
+      - { name: tn_min_date, logicalType: date }
+      - { name: rr_max, logicalType: number, description: "Jour le plus pluvieux (mm), absent de /v2/records" }
+      - { name: rr_max_date, logicalType: date }
+
+  # -------------------- 3. Validation avec /v2/records --------------------
+  - name: gold_validation_records
+    physicalName: climate-project/data/gold/validation_records
+    physicalType: table
+    description: >
+      Comparaison de nos records avec ceux de l'API (/v2/records, depuis 1941).
+      Cohérence : nos extrêmes ne dépassent jamais un record historique.
+      Concordance : si la date du record de l'API est dans nos données, notre
+      valeur ce jour-là est identique (tolérance 0,05).
+      Les records de l'API viennent de la même source (v2) : il s'agit d'un
+      contrôle de cohérence de la chaîne, pas d'une référence indépendante.
+    dataGranularityDescription: "Une ligne = une station x un mois du calendrier."
+    properties:
+      - { name: station_id, logicalType: string, required: true, primaryKey: true, primaryKeyPosition: 1 }
+      - { name: mois_calendaire, logicalType: integer, required: true, primaryKey: true, primaryKeyPosition: 2 }
+      - { name: coherence_tx, logicalType: string, description: "OK / KO / NA" }
+      - { name: coherence_tn, logicalType: string, description: "OK / KO / NA" }
+      - { name: concordance_tx, logicalType: string, description: "OK / KO / NA (NA : record hors de nos années)" }
+      - { name: concordance_tn, logicalType: string, description: "OK / KO / NA" }
+    quality:
+      - name: aucun_ko
+        type: sql
+        description: "Aucune incohérence ni discordance"
+        query: >
+          SELECT COUNT(*) FROM gold_validation_records
+          WHERE 'KO' IN (coherence_tx, coherence_tn, concordance_tx, concordance_tn)
+        mustBe: 0
+
+servers:
+  - server: local
+    type: local
+    format: parquet
+    path: climate-project/data/gold/
+    description: "Stockage local (test). Plus tard : stockage objet S3 de l'école"
+
+team:
+  - username: equipe-extremes-climatiques
+    role: owner
+
+customProperties:
+  - property: producteur
+    value: climate-project/gold/build_gold.py
+  - property: dependances
+    value: "Silver observations_jour (contrat silver-observations-jour) + Bronze v2_records (dernière version)"
+  - property: parametres
+    value: "config.yaml, section episodes (méthode, seuils, durée minimale, tolérance)"
+  - property: tests
+    value: "climate-project/tests/test_gold_episodes.py (10 tests) ; validation /v2/records à chaque exécution"
+  - property: resultatsTest
+    value: >
+      Périmètre de test : 28 canicules, 13 vagues de froid, 99 épisodes de fortes
+      pluies. Validation : cohérence 120/120 (tx et tn), concordance 17 OK (tx) et
+      7 OK (tn), 0 KO.
+  - property: questionsOuvertes
+    value: >
+      Bornes horaires de la « journée » de l'API (0h-24h ou 6h-6h UTC).
+      Nombre élevé de fortes pluies dans certaines stations (ex. Brest) : à
+      réexaminer avec la méthode B (seuils par station).
