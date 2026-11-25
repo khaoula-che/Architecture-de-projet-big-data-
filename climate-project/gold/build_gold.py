@@ -1,9 +1,11 @@
 """
 build_gold.py - Couche Gold : Silver -> produits finaux (PySpark).
 
-Produit 3 tables :
-  gold/episodes            catalogue des episodes extremes (canicule, vague de froid,
-                           fortes pluies), une ligne par episode
+Produit 3 tables (+ 1 table mise de cote) :
+  gold/episodes            catalogue OFFICIEL des episodes extremes, une ligne par episode
+                           (types dont le statut est "publie" : canicule, vague de froid)
+  gold/episodes_experimental  episodes des types "experimental" (fortes pluies, D31 :
+                           pluie de la source non fiable), meme schema, hors catalogue
   gold/records_stations    nos records par station et par mois du calendrier
   gold/validation_records  comparaison de nos records avec /v2/records de l'API
                            (coherence + concordance)
@@ -18,6 +20,7 @@ Regles (decisions D19 a D22, parametres dans config.yaml section "episodes") :
 Usage (depuis la racine du depot) :
   python3 climate-project/gold/build_gold.py
 """
+import shutil
 import sys
 from pathlib import Path
 
@@ -31,6 +34,9 @@ SILVER = PROJET / CONFIG["chemins"]["silver"]
 GOLD = PROJET / CONFIG["chemins"]["gold"]
 EP = CONFIG["episodes"]
 TYPES = ["canicule", "vague_froid", "fortes_pluies"]
+# D31 : seuls les types "publie" vont dans le catalogue officiel
+PUBLIES = [t for t in TYPES if EP[t].get("statut", "publie") == "publie"]
+EXPERIMENTAUX = [t for t in TYPES if t not in PUBLIES]
 VALIDES = ["OK", "SUSPECT"]       # D22 : SUSPECT utilise mais signale
 MANQUANTS = ["ABSENT", "INVALIDE"]
 EPS = 0.05                        # tolerance pour comparer des nombres a virgule
@@ -173,14 +179,22 @@ def main():
                            "date", "tx", "qc_tx", "tn", "qc_tn", "rr", "qc_rr")
                    .cache())
 
-    # Produit 1
+    # Produit 1 : catalogue officiel (types "publie") + types mis de cote (D31)
     tol = EP["jours_manquants_toleres"]
-    episodes = None
-    for t in TYPES:
-        e = detecter(silver, t, EP[t], tol)
-        episodes = e if episodes is None else episodes.unionByName(e)
-    (episodes.repartition("annee").sortWithinPartitions("station_id", "date_debut")
-             .write.mode("overwrite").partitionBy("annee").parquet(str(GOLD / "episodes")))
+
+    def ecrire_episodes(types, nom):
+        if not types:                      # aucun type : on retire l'ancienne table
+            shutil.rmtree(GOLD / nom, ignore_errors=True)
+            return
+        episodes = None
+        for t in types:
+            e = detecter(silver, t, EP[t], tol)
+            episodes = e if episodes is None else episodes.unionByName(e)
+        (episodes.repartition("annee").sortWithinPartitions("station_id", "date_debut")
+                 .write.mode("overwrite").partitionBy("annee").parquet(str(GOLD / nom)))
+
+    ecrire_episodes(PUBLIES, "episodes")
+    ecrire_episodes(EXPERIMENTAUX, "episodes_experimental")
 
     # Produit 2
     recs = records(silver)
@@ -193,9 +207,14 @@ def main():
 
     # ---------- Bilan ----------
     ep = spark.read.parquet(str(GOLD / "episodes"))
-    print("=== Catalogue des episodes ===")
+    print("=== Catalogue officiel des episodes ===")
     for r in ep.groupBy("type").count().orderBy("type").collect():
         print(f"  {r['type']:<14} {r['count']} episode(s)")
+    if EXPERIMENTAUX:
+        ex = spark.read.parquet(str(GOLD / "episodes_experimental"))
+        print("\n=== Mis de cote (experimental, hors catalogue - D31) ===")
+        for r in ex.groupBy("type").count().orderBy("type").collect():
+            print(f"  {r['type']:<14} {r['count']} episode(s)")
 
     v = spark.read.parquet(str(GOLD / "validation_records"))
     print(f"\n=== Validation avec /v2/records ({v.count()} couples station x mois) ===")

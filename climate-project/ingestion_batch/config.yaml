@@ -83,13 +83,17 @@ episodes:
     sens: haut                     # un jour compte si tx >= seuil
     seuil: 35
     jours_min: 3
+    statut: publie                 # D31 : valide avec /v2/records
   vague_froid:
     mesure: tn
     sens: bas                      # un jour compte si tn <= seuil
     seuil: -5
     jours_min: 3
+    statut: publie                 # D31 : valide avec /v2/records
   fortes_pluies:
     mesure: rr
     sens: haut
     seuil: 50
     jours_min: 1
+    statut: experimental           # D31 : pluie de la source non fiable (biais ~+65 %, valeurs aberrantes)
+                                   #       -> gold/episodes_experimental, hors catalogue officiel

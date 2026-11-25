@@ -10,15 +10,16 @@ apiVersion: v3.0.2
 kind: DataContract
 id: gold-episodes-extremes
 name: Gold - episodes extremes, records et validation
-version: 1.0.0
+version: 1.1.0
 status: active
 domain: climat
 dataProduct: extremes-climatiques-france
 
 description:
   purpose: >
-    Catalogue des épisodes extrêmes (canicules, vagues de froid, fortes pluies)
-    détectés dans le Silver, records par station et par mois, et preuve de
+    Catalogue officiel des épisodes extrêmes (canicules, vagues de froid)
+    détectés dans le Silver ; les fortes pluies sont mises de côté dans
+    gold/episodes_experimental (même schéma, D31), records par station et par mois, et preuve de
     correction par comparaison avec les records de l'API (/v2/records).
   usage: >
     Base de l'usage IA et des analyses. Chaque épisode indique la méthode et le
@@ -31,9 +32,13 @@ description:
     passage prévu à la méthode B (seuils propres à chaque station) puis
     comparaison à la méthode C (Météo-France, canicule). Tolérance d'un jour
     manquant (D21) provisoire. Les épisodes aux bords des périodes chargées
-    peuvent être tronqués (années non contiguës : 2003, 2019, 2022).
-    Périmètre actuel : TEST (10 stations). Gold recalculé en entier à chaque
-    exécution (incrémental à venir).
+    peuvent être tronqués. Périmètre actuel : TEST (10 stations, 1991-2022).
+    Gold recalculé en entier à chaque exécution.
+    D31 : la pluie (rr) de la source n'est pas fiable (cumuls annuels 1,6 à 1,7
+    fois les normales Météo-France 1991-2020, valeurs aberrantes à Paris les
+    28-30/11/2000, rr presque absent en 1991-1992). Les épisodes de fortes pluies
+    sont donc hors catalogue (gold/episodes_experimental) en attendant la
+    réponse du professeur ; rr_max de records_stations n'est pas validé.
 
 schema:
   # -------------------- 1. Catalogue des épisodes --------------------
@@ -64,7 +69,7 @@ schema:
       - name: type
         logicalType: string
         required: true
-        description: "canicule, vague_froid ou fortes_pluies"
+        description: "canicule ou vague_froid (catalogue officiel) ; fortes_pluies dans gold/episodes_experimental (D31)"
       - name: date_debut
         logicalType: date
         required: true
@@ -205,11 +210,11 @@ customProperties:
     value: "climate-project/tests/test_gold_episodes.py (10 tests) ; validation /v2/records à chaque exécution"
   - property: resultatsTest
     value: >
-      Périmètre de test : 28 canicules, 13 vagues de froid, 99 épisodes de fortes
-      pluies. Validation : cohérence 120/120 (tx et tn), concordance 17 OK (tx) et
-      7 OK (tn), 0 KO.
+      Périmètre 10 stations x 2003, 2019, 2022 (v1.0.0) : 28 canicules, 13 vagues
+      de froid, 99 épisodes de fortes pluies ; cohérence 120/120, concordance 17 OK
+      (tx) et 7 OK (tn), 0 KO. Périmètre 10 stations x 1991-2022 : à compléter.
   - property: questionsOuvertes
     value: >
       Bornes horaires de la « journée » de l'API (0h-24h ou 6h-6h UTC).
-      Nombre élevé de fortes pluies dans certaines stations (ex. Brest) : à
-      réexaminer avec la méthode B (seuils par station).
+      Pluie de la source non fiable (D31) : question envoyée au professeur
+      (double comptage des cumuls infra-journaliers ?).
