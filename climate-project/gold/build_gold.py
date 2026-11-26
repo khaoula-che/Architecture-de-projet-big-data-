@@ -20,6 +20,7 @@ Regles (decisions D19 a D22, parametres dans config.yaml section "episodes") :
 Usage (depuis la racine du depot) :
   python3 climate-project/gold/build_gold.py
 """
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -43,11 +44,19 @@ EPS = 0.05                        # tolerance pour comparer des nombres a virgul
 
 
 def creer_spark():
-    spark = (SparkSession.builder.appName("build_gold").master("local[*]")
-             .config("spark.sql.session.timeZone", "UTC")
-             # Le Gold est recalcule en entier : on remplace toute la table
-             .config("spark.sql.sources.partitionOverwriteMode", "static")
-             .getOrCreate())
+    # Ou tourne Spark : local[*] par defaut (tous les coeurs du Mac). Reglable sans
+    # toucher au code : SPARK_MASTER=local[2] pour les mesures, spark://... sur le cluster.
+    b = (SparkSession.builder.appName("build_gold")
+         .master(os.environ.get("SPARK_MASTER", "local[*]"))
+         .config("spark.sql.session.timeZone", "UTC")
+         # Le Gold est recalcule en entier : on remplace toute la table
+         .config("spark.sql.sources.partitionOverwriteMode", "static"))
+    # Mesures (S3) : journal d'execution Spark (duree, shuffle, spill) si demande
+    if os.environ.get("SPARK_EVENTLOG_DIR"):
+        b = (b.config("spark.eventLog.enabled", "true")
+              .config("spark.eventLog.dir", os.environ["SPARK_EVENTLOG_DIR"])
+              .config("spark.eventLog.compress", "false"))
+    spark = b.getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
     return spark
 
