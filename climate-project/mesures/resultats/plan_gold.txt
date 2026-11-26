@@ -1,0 +1,1101 @@
+Reglages Spark : {'spark.master': 'local[*]', 'spark.sql.shuffle.partitions': '200', 'spark.sql.adaptive.enabled': 'true', 'spark.sql.adaptive.coalescePartitions.enabled': 'true', 'spark.sql.autoBroadcastJoinThreshold': '10485760b'}
+
+====================================================================================================
+episodes (catalogue officiel)
+====================================================================================================
+== Physical Plan ==
+AdaptiveSparkPlan (43)
++- Union (42)
+   :- Project (22)
+   :  +- Filter (21)
+   :     +- HashAggregate (20)
+   :        +- HashAggregate (19)
+   :           +- Project (18)
+   :              +- Window (17)
+   :                 +- Project (16)
+   :                    +- Project (15)
+   :                       +- Project (14)
+   :                          +- Window (13)
+   :                             +- Project (12)
+   :                                +- Filter (11)
+   :                                   +- Window (10)
+   :                                      +- Sort (9)
+   :                                         +- Exchange (8)
+   :                                            +- Project (7)
+   :                                               +- Project (6)
+   :                                                  +- InMemoryTableScan (1)
+   :                                                        +- InMemoryRelation (2)
+   :                                                              +- * Project (5)
+   :                                                                 +- * ColumnarToRow (4)
+   :                                                                    +- Scan parquet  (3)
+   +- Project (41)
+      +- Filter (40)
+         +- HashAggregate (39)
+            +- HashAggregate (38)
+               +- Project (37)
+                  +- Window (36)
+                     +- Project (35)
+                        +- Project (34)
+                           +- Project (33)
+                              +- Window (32)
+                                 +- Project (31)
+                                    +- Filter (30)
+                                       +- Window (29)
+                                          +- Sort (28)
+                                             +- Exchange (27)
+                                                +- Project (26)
+                                                   +- Project (25)
+                                                      +- InMemoryTableScan (23)
+                                                            +- InMemoryRelation (24)
+                                                                  +- * Project (5)
+                                                                     +- * ColumnarToRow (4)
+                                                                        +- Scan parquet  (3)
+
+
+(1) InMemoryTableScan
+Output [8]: [date#1, departement#13, latitude#14, longitude#15, nom_station#12, qc_tx#3, station_id#0, tx#2]
+Arguments: [date#1, departement#13, latitude#14, longitude#15, nom_station#12, qc_tx#3, station_id#0, tx#2]
+
+(2) InMemoryRelation
+Arguments: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(3) Scan parquet 
+Output [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+Batched: true
+Location: InMemoryFileIndex [file:/Users/sirinehamiche/Projets/Projet_architecture_big_data/climate-project/data/silver/observations_jour]
+ReadSchema: struct<station_id:string,date:date,tx:double,qc_tx:string,tn:double,qc_tn:string,rr:double,qc_rr:string,nom_station:string,departement:string,latitude:double,longitude:double>
+
+(4) ColumnarToRow [codegen id : 1]
+Input [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+
+(5) Project [codegen id : 1]
+Output [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8]
+Input [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+
+(6) Project
+Output [9]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, CASE WHEN qc_tx#3 IN (ABSENT,INVALIDE) THEN M WHEN (qc_tx#3 IN (OK,SUSPECT) AND (tx#2 >= 35.0)) THEN H ELSE N END AS marque#84]
+Input [8]: [date#1, departement#13, latitude#14, longitude#15, nom_station#12, qc_tx#3, station_id#0, tx#2]
+
+(7) Project
+Output [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#84, cast((marque#84 = N) as int) AS _w0#87]
+Input [9]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#84]
+
+(8) Exchange
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#84, _w0#87]
+Arguments: hashpartitioning(station_id#0, 200), ENSURE_REQUIREMENTS, [plan_id=137]
+
+(9) Sort
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#84, _w0#87]
+Arguments: [station_id#0 ASC NULLS FIRST, date#1 ASC NULLS FIRST], false, 0
+
+(10) Window
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#84, _w0#87]
+Arguments: [sum(_w0#87) windowspecdefinition(station_id#0, date#1 ASC NULLS FIRST, specifiedwindowframe(RangeFrame, unboundedpreceding$(), currentrow$())) AS cum_normaux#85L], [station_id#0], [date#1 ASC NULLS FIRST]
+
+(11) Filter
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#84, _w0#87, cum_normaux#85L]
+Condition : (marque#84 = H)
+
+(12) Project
+Output [9]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, cum_normaux#85L]
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#84, _w0#87, cum_normaux#85L]
+
+(13) Window
+Input [9]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, cum_normaux#85L]
+Arguments: [lag(date#1, -1, null) windowspecdefinition(station_id#0, date#1 ASC NULLS FIRST, specifiedwindowframe(RowFrame, -1, -1)) AS prev_date#88, lag(cum_normaux#85L, -1, null) windowspecdefinition(station_id#0, date#1 ASC NULLS FIRST, specifiedwindowframe(RowFrame, -1, -1)) AS _we0#90L], [station_id#0], [date#1 ASC NULLS FIRST]
+
+(14) Project
+Output [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, prev_date#88, (cum_normaux#85L - _we0#90L) AS normaux_entre#89L]
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, cum_normaux#85L, prev_date#88, _we0#90L]
+
+(15) Project
+Output [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, prev_date#88, normaux_entre#89L, (cast((datediff(date#1, prev_date#88) - 1) as bigint) - normaux_entre#89L) AS manquants_entre#91L]
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, prev_date#88, normaux_entre#89L]
+
+(16) Project
+Output [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, manquants_entre#91L, cast(((isnull(prev_date#88) OR (normaux_entre#89L > 0)) OR (manquants_entre#91L > 1)) as int) AS nouveau#92]
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, prev_date#88, normaux_entre#89L, manquants_entre#91L]
+
+(17) Window
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, manquants_entre#91L, nouveau#92]
+Arguments: [sum(nouveau#92) windowspecdefinition(station_id#0, date#1 ASC NULLS FIRST, specifiedwindowframe(RangeFrame, unboundedpreceding$(), currentrow$())) AS num_episode#93L], [station_id#0], [date#1 ASC NULLS FIRST]
+
+(18) Project
+Output [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, num_episode#93L, CASE WHEN (nouveau#92 = 0) THEN manquants_entre#91L ELSE 0 END AS manquants_inclus#95L]
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, manquants_entre#91L, nouveau#92, num_episode#93L]
+
+(19) HashAggregate
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, num_episode#93L, manquants_inclus#95L]
+Keys [6]: [station_id#0, nom_station#12, departement#13, knownfloatingpointnormalized(normalizenanandzero(latitude#14)) AS latitude#14, knownfloatingpointnormalized(normalizenanandzero(longitude#15)) AS longitude#15, num_episode#93L]
+Functions [7]: [partial_min(date#1), partial_max(date#1), partial_count(1), partial_sum(manquants_inclus#95L), partial_max(tx#2), partial_avg(tx#2), partial_max(cast((qc_tx#3 = SUSPECT) as int))]
+Aggregate Attributes [8]: [min#834, max#835, count#836L, sum#837L, max#838, sum#839, count#840L, max#841]
+Results [14]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, num_episode#93L, min#842, max#843, count#844L, sum#845L, max#846, sum#847, count#848L, max#849]
+
+(20) HashAggregate
+Input [14]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, num_episode#93L, min#842, max#843, count#844L, sum#845L, max#846, sum#847, count#848L, max#849]
+Keys [6]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, num_episode#93L]
+Functions [7]: [min(date#1), max(date#1), count(1), sum(manquants_inclus#95L), max(tx#2), avg(tx#2), max(cast((qc_tx#3 = SUSPECT) as int))]
+Aggregate Attributes [7]: [min(date#1)#125, max(date#1)#126, count(1)#124L, sum(manquants_inclus#95L)#127L, max(tx#2)#128, avg(tx#2)#129, max(cast((qc_tx#3 = SUSPECT) as int))#131]
+Results [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, min(date#1)#125 AS date_debut#96, max(date#1)#126 AS date_fin#97, count(1)#124L AS nb_jours_seuil#98L, cast(sum(manquants_inclus#95L)#127L as int) AS nb_jours_manquants#99, max(tx#2)#128 AS intensite#100, round(avg(tx#2)#129, 1) AS moyenne#101, max(cast((qc_tx#3 = SUSPECT) as int))#131 AS _suspect#103]
+
+(21) Filter
+Input [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date_debut#96, date_fin#97, nb_jours_seuil#98L, nb_jours_manquants#99, intensite#100, moyenne#101, _suspect#103]
+Condition : (nb_jours_seuil#98L >= 3)
+
+(22) Project
+Output [19]: [concat_ws(_, station_id#0, canicule, cast(date_debut#96 as string)) AS episode_id#132, station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, canicule AS type#133, date_debut#96, date_fin#97, (datediff(date_fin#97, date_debut#96) + 1) AS duree_jours#134, nb_jours_seuil#98L, nb_jours_manquants#99, intensite#100, moyenne#101, null AS cumul_rr#135, (_suspect#103 = 1) AS contient_suspect#136, A_seuils_fixes AS methode#137, 35.0 AS seuil#138, year(date_debut#96) AS annee#139]
+Input [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date_debut#96, date_fin#97, nb_jours_seuil#98L, nb_jours_manquants#99, intensite#100, moyenne#101, _suspect#103]
+
+(23) InMemoryTableScan
+Output [8]: [date#197, departement#209, latitude#210, longitude#211, nom_station#208, qc_tn#201, station_id#196, tn#200]
+Arguments: [date#197, departement#209, latitude#210, longitude#211, nom_station#208, qc_tn#201, station_id#196, tn#200]
+
+(24) InMemoryRelation
+Arguments: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tx#198, qc_tx#199, tn#200, qc_tn#201, rr#203, qc_rr#204], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(25) Project
+Output [9]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, CASE WHEN qc_tn#201 IN (ABSENT,INVALIDE) THEN M WHEN (qc_tn#201 IN (OK,SUSPECT) AND (tn#200 <= -5.0)) THEN H ELSE N END AS marque#140]
+Input [8]: [date#197, departement#209, latitude#210, longitude#211, nom_station#208, qc_tn#201, station_id#196, tn#200]
+
+(26) Project
+Output [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, marque#140, cast((marque#140 = N) as int) AS _w0#143]
+Input [9]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, marque#140]
+
+(27) Exchange
+Input [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, marque#140, _w0#143]
+Arguments: hashpartitioning(station_id#196, 200), ENSURE_REQUIREMENTS, [plan_id=152]
+
+(28) Sort
+Input [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, marque#140, _w0#143]
+Arguments: [station_id#196 ASC NULLS FIRST, date#197 ASC NULLS FIRST], false, 0
+
+(29) Window
+Input [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, marque#140, _w0#143]
+Arguments: [sum(_w0#143) windowspecdefinition(station_id#196, date#197 ASC NULLS FIRST, specifiedwindowframe(RangeFrame, unboundedpreceding$(), currentrow$())) AS cum_normaux#141L], [station_id#196], [date#197 ASC NULLS FIRST]
+
+(30) Filter
+Input [11]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, marque#140, _w0#143, cum_normaux#141L]
+Condition : (marque#140 = H)
+
+(31) Project
+Output [9]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, cum_normaux#141L]
+Input [11]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, marque#140, _w0#143, cum_normaux#141L]
+
+(32) Window
+Input [9]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, cum_normaux#141L]
+Arguments: [lag(date#197, -1, null) windowspecdefinition(station_id#196, date#197 ASC NULLS FIRST, specifiedwindowframe(RowFrame, -1, -1)) AS prev_date#144, lag(cum_normaux#141L, -1, null) windowspecdefinition(station_id#196, date#197 ASC NULLS FIRST, specifiedwindowframe(RowFrame, -1, -1)) AS _we0#146L], [station_id#196], [date#197 ASC NULLS FIRST]
+
+(33) Project
+Output [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, prev_date#144, (cum_normaux#141L - _we0#146L) AS normaux_entre#145L]
+Input [11]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, cum_normaux#141L, prev_date#144, _we0#146L]
+
+(34) Project
+Output [11]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, prev_date#144, normaux_entre#145L, (cast((datediff(date#197, prev_date#144) - 1) as bigint) - normaux_entre#145L) AS manquants_entre#147L]
+Input [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, prev_date#144, normaux_entre#145L]
+
+(35) Project
+Output [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, manquants_entre#147L, cast(((isnull(prev_date#144) OR (normaux_entre#145L > 0)) OR (manquants_entre#147L > 1)) as int) AS nouveau#148]
+Input [11]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, prev_date#144, normaux_entre#145L, manquants_entre#147L]
+
+(36) Window
+Input [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, manquants_entre#147L, nouveau#148]
+Arguments: [sum(nouveau#148) windowspecdefinition(station_id#196, date#197 ASC NULLS FIRST, specifiedwindowframe(RangeFrame, unboundedpreceding$(), currentrow$())) AS num_episode#149L], [station_id#196], [date#197 ASC NULLS FIRST]
+
+(37) Project
+Output [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, num_episode#149L, CASE WHEN (nouveau#148 = 0) THEN manquants_entre#147L ELSE 0 END AS manquants_inclus#151L]
+Input [11]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, manquants_entre#147L, nouveau#148, num_episode#149L]
+
+(38) HashAggregate
+Input [10]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date#197, tn#200, qc_tn#201, num_episode#149L, manquants_inclus#151L]
+Keys [6]: [station_id#196, nom_station#208, departement#209, knownfloatingpointnormalized(normalizenanandzero(latitude#210)) AS latitude#210, knownfloatingpointnormalized(normalizenanandzero(longitude#211)) AS longitude#211, num_episode#149L]
+Functions [7]: [partial_min(date#197), partial_max(date#197), partial_count(1), partial_sum(manquants_inclus#151L), partial_min(tn#200), partial_avg(tn#200), partial_max(cast((qc_tn#201 = SUSPECT) as int))]
+Aggregate Attributes [8]: [min#850, max#851, count#852L, sum#853L, min#854, sum#855, count#856L, max#857]
+Results [14]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, num_episode#149L, min#858, max#859, count#860L, sum#861L, min#862, sum#863, count#864L, max#865]
+
+(39) HashAggregate
+Input [14]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, num_episode#149L, min#858, max#859, count#860L, sum#861L, min#862, sum#863, count#864L, max#865]
+Keys [6]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, num_episode#149L]
+Functions [7]: [min(date#197), max(date#197), count(1), sum(manquants_inclus#151L), min(tn#200), avg(tn#200), max(cast((qc_tn#201 = SUSPECT) as int))]
+Aggregate Attributes [7]: [min(date#197)#181, max(date#197)#182, count(1)#180L, sum(manquants_inclus#151L)#183L, min(tn#200)#184, avg(tn#200)#185, max(cast((qc_tn#201 = SUSPECT) as int))#187]
+Results [12]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, min(date#197)#181 AS date_debut#152, max(date#197)#182 AS date_fin#153, count(1)#180L AS nb_jours_seuil#154L, cast(sum(manquants_inclus#151L)#183L as int) AS nb_jours_manquants#155, min(tn#200)#184 AS intensite#156, round(avg(tn#200)#185, 1) AS moyenne#157, max(cast((qc_tn#201 = SUSPECT) as int))#187 AS _suspect#159]
+
+(40) Filter
+Input [12]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date_debut#152, date_fin#153, nb_jours_seuil#154L, nb_jours_manquants#155, intensite#156, moyenne#157, _suspect#159]
+Condition : (nb_jours_seuil#154L >= 3)
+
+(41) Project
+Output [19]: [concat_ws(_, station_id#196, vague_froid, cast(date_debut#152 as string)) AS episode_id#188, station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, vague_froid AS type#189, date_debut#152, date_fin#153, (datediff(date_fin#153, date_debut#152) + 1) AS duree_jours#190, nb_jours_seuil#154L, nb_jours_manquants#155, intensite#156, moyenne#157, null AS cumul_rr#191, (_suspect#159 = 1) AS contient_suspect#192, A_seuils_fixes AS methode#193, -5.0 AS seuil#194, year(date_debut#152) AS annee#195]
+Input [12]: [station_id#196, nom_station#208, departement#209, latitude#210, longitude#211, date_debut#152, date_fin#153, nb_jours_seuil#154L, nb_jours_manquants#155, intensite#156, moyenne#157, _suspect#159]
+
+(42) Union
+
+(43) AdaptiveSparkPlan
+Output [19]: [episode_id#132, station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, type#133, date_debut#96, date_fin#97, duree_jours#134, nb_jours_seuil#98L, nb_jours_manquants#99, intensite#100, moyenne#101, cumul_rr#135, contient_suspect#136, methode#137, seuil#138, annee#139]
+Arguments: isFinalPlan=false
+
+
+
+====================================================================================================
+canicule seule (1 type)
+====================================================================================================
+== Physical Plan ==
+AdaptiveSparkPlan (23)
++- Project (22)
+   +- Filter (21)
+      +- HashAggregate (20)
+         +- HashAggregate (19)
+            +- Project (18)
+               +- Window (17)
+                  +- Project (16)
+                     +- Project (15)
+                        +- Project (14)
+                           +- Window (13)
+                              +- Project (12)
+                                 +- Filter (11)
+                                    +- Window (10)
+                                       +- Sort (9)
+                                          +- Exchange (8)
+                                             +- Project (7)
+                                                +- Project (6)
+                                                   +- InMemoryTableScan (1)
+                                                         +- InMemoryRelation (2)
+                                                               +- * Project (5)
+                                                                  +- * ColumnarToRow (4)
+                                                                     +- Scan parquet  (3)
+
+
+(1) InMemoryTableScan
+Output [8]: [date#1, departement#13, latitude#14, longitude#15, nom_station#12, qc_tx#3, station_id#0, tx#2]
+Arguments: [date#1, departement#13, latitude#14, longitude#15, nom_station#12, qc_tx#3, station_id#0, tx#2]
+
+(2) InMemoryRelation
+Arguments: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(3) Scan parquet 
+Output [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+Batched: true
+Location: InMemoryFileIndex [file:/Users/sirinehamiche/Projets/Projet_architecture_big_data/climate-project/data/silver/observations_jour]
+ReadSchema: struct<station_id:string,date:date,tx:double,qc_tx:string,tn:double,qc_tn:string,rr:double,qc_rr:string,nom_station:string,departement:string,latitude:double,longitude:double>
+
+(4) ColumnarToRow [codegen id : 1]
+Input [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+
+(5) Project [codegen id : 1]
+Output [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8]
+Input [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+
+(6) Project
+Output [9]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, CASE WHEN qc_tx#3 IN (ABSENT,INVALIDE) THEN M WHEN (qc_tx#3 IN (OK,SUSPECT) AND (tx#2 >= 35.0)) THEN H ELSE N END AS marque#327]
+Input [8]: [date#1, departement#13, latitude#14, longitude#15, nom_station#12, qc_tx#3, station_id#0, tx#2]
+
+(7) Project
+Output [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#327, cast((marque#327 = N) as int) AS _w0#330]
+Input [9]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#327]
+
+(8) Exchange
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#327, _w0#330]
+Arguments: hashpartitioning(station_id#0, 200), ENSURE_REQUIREMENTS, [plan_id=229]
+
+(9) Sort
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#327, _w0#330]
+Arguments: [station_id#0 ASC NULLS FIRST, date#1 ASC NULLS FIRST], false, 0
+
+(10) Window
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#327, _w0#330]
+Arguments: [sum(_w0#330) windowspecdefinition(station_id#0, date#1 ASC NULLS FIRST, specifiedwindowframe(RangeFrame, unboundedpreceding$(), currentrow$())) AS cum_normaux#328L], [station_id#0], [date#1 ASC NULLS FIRST]
+
+(11) Filter
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#327, _w0#330, cum_normaux#328L]
+Condition : (marque#327 = H)
+
+(12) Project
+Output [9]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, cum_normaux#328L]
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, marque#327, _w0#330, cum_normaux#328L]
+
+(13) Window
+Input [9]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, cum_normaux#328L]
+Arguments: [lag(date#1, -1, null) windowspecdefinition(station_id#0, date#1 ASC NULLS FIRST, specifiedwindowframe(RowFrame, -1, -1)) AS prev_date#331, lag(cum_normaux#328L, -1, null) windowspecdefinition(station_id#0, date#1 ASC NULLS FIRST, specifiedwindowframe(RowFrame, -1, -1)) AS _we0#333L], [station_id#0], [date#1 ASC NULLS FIRST]
+
+(14) Project
+Output [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, prev_date#331, (cum_normaux#328L - _we0#333L) AS normaux_entre#332L]
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, cum_normaux#328L, prev_date#331, _we0#333L]
+
+(15) Project
+Output [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, prev_date#331, normaux_entre#332L, (cast((datediff(date#1, prev_date#331) - 1) as bigint) - normaux_entre#332L) AS manquants_entre#334L]
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, prev_date#331, normaux_entre#332L]
+
+(16) Project
+Output [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, manquants_entre#334L, cast(((isnull(prev_date#331) OR (normaux_entre#332L > 0)) OR (manquants_entre#334L > 1)) as int) AS nouveau#335]
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, prev_date#331, normaux_entre#332L, manquants_entre#334L]
+
+(17) Window
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, manquants_entre#334L, nouveau#335]
+Arguments: [sum(nouveau#335) windowspecdefinition(station_id#0, date#1 ASC NULLS FIRST, specifiedwindowframe(RangeFrame, unboundedpreceding$(), currentrow$())) AS num_episode#336L], [station_id#0], [date#1 ASC NULLS FIRST]
+
+(18) Project
+Output [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, num_episode#336L, CASE WHEN (nouveau#335 = 0) THEN manquants_entre#334L ELSE 0 END AS manquants_inclus#338L]
+Input [11]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, manquants_entre#334L, nouveau#335, num_episode#336L]
+
+(19) HashAggregate
+Input [10]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, num_episode#336L, manquants_inclus#338L]
+Keys [6]: [station_id#0, nom_station#12, departement#13, knownfloatingpointnormalized(normalizenanandzero(latitude#14)) AS latitude#14, knownfloatingpointnormalized(normalizenanandzero(longitude#15)) AS longitude#15, num_episode#336L]
+Functions [7]: [partial_min(date#1), partial_max(date#1), partial_count(1), partial_sum(manquants_inclus#338L), partial_max(tx#2), partial_avg(tx#2), partial_max(cast((qc_tx#3 = SUSPECT) as int))]
+Aggregate Attributes [8]: [min#1046, max#1047, count#1048L, sum#1049L, max#1050, sum#1051, count#1052L, max#1053]
+Results [14]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, num_episode#336L, min#1054, max#1055, count#1056L, sum#1057L, max#1058, sum#1059, count#1060L, max#1061]
+
+(20) HashAggregate
+Input [14]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, num_episode#336L, min#1054, max#1055, count#1056L, sum#1057L, max#1058, sum#1059, count#1060L, max#1061]
+Keys [6]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, num_episode#336L]
+Functions [7]: [min(date#1), max(date#1), count(1), sum(manquants_inclus#338L), max(tx#2), avg(tx#2), max(cast((qc_tx#3 = SUSPECT) as int))]
+Aggregate Attributes [7]: [min(date#1)#368, max(date#1)#369, count(1)#367L, sum(manquants_inclus#338L)#370L, max(tx#2)#371, avg(tx#2)#372, max(cast((qc_tx#3 = SUSPECT) as int))#374]
+Results [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, min(date#1)#368 AS date_debut#339, max(date#1)#369 AS date_fin#340, count(1)#367L AS nb_jours_seuil#341L, cast(sum(manquants_inclus#338L)#370L as int) AS nb_jours_manquants#342, max(tx#2)#371 AS intensite#343, round(avg(tx#2)#372, 1) AS moyenne#344, max(cast((qc_tx#3 = SUSPECT) as int))#374 AS _suspect#346]
+
+(21) Filter
+Input [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date_debut#339, date_fin#340, nb_jours_seuil#341L, nb_jours_manquants#342, intensite#343, moyenne#344, _suspect#346]
+Condition : (nb_jours_seuil#341L >= 3)
+
+(22) Project
+Output [19]: [concat_ws(_, station_id#0, canicule, cast(date_debut#339 as string)) AS episode_id#375, station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, canicule AS type#376, date_debut#339, date_fin#340, (datediff(date_fin#340, date_debut#339) + 1) AS duree_jours#377, nb_jours_seuil#341L, nb_jours_manquants#342, intensite#343, moyenne#344, null AS cumul_rr#378, (_suspect#346 = 1) AS contient_suspect#379, A_seuils_fixes AS methode#380, 35.0 AS seuil#381, year(date_debut#339) AS annee#382]
+Input [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date_debut#339, date_fin#340, nb_jours_seuil#341L, nb_jours_manquants#342, intensite#343, moyenne#344, _suspect#346]
+
+(23) AdaptiveSparkPlan
+Output [19]: [episode_id#375, station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, type#376, date_debut#339, date_fin#340, duree_jours#377, nb_jours_seuil#341L, nb_jours_manquants#342, intensite#343, moyenne#344, cumul_rr#378, contient_suspect#379, methode#380, seuil#381, annee#382]
+Arguments: isFinalPlan=false
+
+
+
+====================================================================================================
+records_stations
+====================================================================================================
+== Physical Plan ==
+AdaptiveSparkPlan (55)
++- Project (54)
+   +- BroadcastHashJoin LeftOuter BuildRight (53)
+      :- Project (39)
+      :  +- BroadcastHashJoin LeftOuter BuildRight (38)
+      :     :- Project (24)
+      :     :  +- BroadcastHashJoin LeftOuter BuildRight (23)
+      :     :     :- ObjectHashAggregate (9)
+      :     :     :  +- Exchange (8)
+      :     :     :     +- ObjectHashAggregate (7)
+      :     :     :        +- Project (6)
+      :     :     :           +- InMemoryTableScan (1)
+      :     :     :                 +- InMemoryRelation (2)
+      :     :     :                       +- * Project (5)
+      :     :     :                          +- * ColumnarToRow (4)
+      :     :     :                             +- Scan parquet  (3)
+      :     :     +- BroadcastExchange (22)
+      :     :        +- Project (21)
+      :     :           +- Filter (20)
+      :     :              +- Window (19)
+      :     :                 +- WindowGroupLimit (18)
+      :     :                    +- Sort (17)
+      :     :                       +- Exchange (16)
+      :     :                          +- WindowGroupLimit (15)
+      :     :                             +- Sort (14)
+      :     :                                +- Project (13)
+      :     :                                   +- Filter (12)
+      :     :                                      +- InMemoryTableScan (10)
+      :     :                                            +- InMemoryRelation (11)
+      :     :                                                  +- * Project (5)
+      :     :                                                     +- * ColumnarToRow (4)
+      :     :                                                        +- Scan parquet  (3)
+      :     +- BroadcastExchange (37)
+      :        +- Project (36)
+      :           +- Filter (35)
+      :              +- Window (34)
+      :                 +- WindowGroupLimit (33)
+      :                    +- Sort (32)
+      :                       +- Exchange (31)
+      :                          +- WindowGroupLimit (30)
+      :                             +- Sort (29)
+      :                                +- Project (28)
+      :                                   +- Filter (27)
+      :                                      +- InMemoryTableScan (25)
+      :                                            +- InMemoryRelation (26)
+      :                                                  +- * Project (5)
+      :                                                     +- * ColumnarToRow (4)
+      :                                                        +- Scan parquet  (3)
+      +- BroadcastExchange (52)
+         +- Project (51)
+            +- Filter (50)
+               +- Window (49)
+                  +- WindowGroupLimit (48)
+                     +- Sort (47)
+                        +- Exchange (46)
+                           +- WindowGroupLimit (45)
+                              +- Sort (44)
+                                 +- Project (43)
+                                    +- Filter (42)
+                                       +- InMemoryTableScan (40)
+                                             +- InMemoryRelation (41)
+                                                   +- * Project (5)
+                                                      +- * ColumnarToRow (4)
+                                                         +- Scan parquet  (3)
+
+
+(1) InMemoryTableScan
+Output [3]: [date#1, nom_station#12, station_id#0]
+Arguments: [date#1, nom_station#12, station_id#0]
+
+(2) InMemoryRelation
+Arguments: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(3) Scan parquet 
+Output [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+Batched: true
+Location: InMemoryFileIndex [file:/Users/sirinehamiche/Projets/Projet_architecture_big_data/climate-project/data/silver/observations_jour]
+ReadSchema: struct<station_id:string,date:date,tx:double,qc_tx:string,tn:double,qc_tn:string,rr:double,qc_rr:string,nom_station:string,departement:string,latitude:double,longitude:double>
+
+(4) ColumnarToRow [codegen id : 1]
+Input [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+
+(5) Project [codegen id : 1]
+Output [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8]
+Input [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+
+(6) Project
+Output [4]: [station_id#0, nom_station#12, date#1, month(date#1) AS mois_calendaire#220]
+Input [3]: [date#1, nom_station#12, station_id#0]
+
+(7) ObjectHashAggregate
+Input [4]: [station_id#0, nom_station#12, date#1, mois_calendaire#220]
+Keys [3]: [station_id#0, mois_calendaire#220, nom_station#12]
+Functions [2]: [partial_count(1), partial_collect_set(cast(year(date#1) as string), 0, 0)]
+Aggregate Attributes [2]: [count#1782L, buf#1783]
+Results [5]: [station_id#0, mois_calendaire#220, nom_station#12, count#1784L, buf#1785]
+
+(8) Exchange
+Input [5]: [station_id#0, mois_calendaire#220, nom_station#12, count#1784L, buf#1785]
+Arguments: hashpartitioning(station_id#0, mois_calendaire#220, nom_station#12, 200), ENSURE_REQUIREMENTS, [plan_id=362]
+
+(9) ObjectHashAggregate
+Input [5]: [station_id#0, mois_calendaire#220, nom_station#12, count#1784L, buf#1785]
+Keys [3]: [station_id#0, mois_calendaire#220, nom_station#12]
+Functions [2]: [count(1), collect_set(cast(year(date#1) as string), 0, 0)]
+Aggregate Attributes [2]: [count(1)#236L, collect_set(cast(year(date#1) as string), 0, 0)#237]
+Results [5]: [station_id#0, mois_calendaire#220, nom_station#12, count(1)#236L AS n_jours#221L, concat_ws(,, array_sort(collect_set(cast(year(date#1) as string), 0, 0)#237, lambdafunction(if ((lambda left#238 < lambda right#239)) -1 else if ((lambda left#238 > lambda right#239)) 1 else 0, lambda left#238, lambda right#239, false), false)) AS annees_couvertes#222]
+
+(10) InMemoryTableScan
+Output [4]: [date#245, qc_tx#247, station_id#244, tx#246]
+Arguments: [date#245, qc_tx#247, station_id#244, tx#246], [qc_tx#247 IN (OK,SUSPECT), isnotnull(station_id#244), isnotnull(month(date#245))]
+
+(11) InMemoryRelation
+Arguments: [station_id#244, nom_station#256, departement#257, latitude#258, longitude#259, date#245, tx#246, qc_tx#247, tn#248, qc_tn#249, rr#251, qc_rr#252], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(12) Filter
+Input [4]: [date#245, qc_tx#247, station_id#244, tx#246]
+Condition : ((qc_tx#247 IN (OK,SUSPECT) AND isnotnull(station_id#244)) AND isnotnull(month(date#245)))
+
+(13) Project
+Output [4]: [station_id#244, date#245, tx#246, month(date#245) AS mois_calendaire#267]
+Input [4]: [date#245, qc_tx#247, station_id#244, tx#246]
+
+(14) Sort
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [station_id#244 ASC NULLS FIRST, mois_calendaire#267 ASC NULLS FIRST, tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST], false, 0
+
+(15) WindowGroupLimit
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [station_id#244, mois_calendaire#267], [tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST], row_number(), 1, Partial
+
+(16) Exchange
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: hashpartitioning(station_id#244, mois_calendaire#267, 200), ENSURE_REQUIREMENTS, [plan_id=367]
+
+(17) Sort
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [station_id#244 ASC NULLS FIRST, mois_calendaire#267 ASC NULLS FIRST, tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST], false, 0
+
+(18) WindowGroupLimit
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [station_id#244, mois_calendaire#267], [tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST], row_number(), 1, Final
+
+(19) Window
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [row_number() windowspecdefinition(station_id#244, mois_calendaire#267, tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS _r#240], [station_id#244, mois_calendaire#267], [tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST]
+
+(20) Filter
+Input [5]: [station_id#244, date#245, tx#246, mois_calendaire#267, _r#240]
+Condition : (_r#240 = 1)
+
+(21) Project
+Output [4]: [station_id#244, mois_calendaire#267, tx#246 AS tx_max#242, date#245 AS tx_max_date#243]
+Input [5]: [station_id#244, date#245, tx#246, mois_calendaire#267, _r#240]
+
+(22) BroadcastExchange
+Input [4]: [station_id#244, mois_calendaire#267, tx_max#242, tx_max_date#243]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, int, true]),false), [plan_id=374]
+
+(23) BroadcastHashJoin
+Left keys [2]: [station_id#0, mois_calendaire#220]
+Right keys [2]: [station_id#244, mois_calendaire#267]
+Join type: LeftOuter
+Join condition: None
+
+(24) Project
+Output [7]: [station_id#0, mois_calendaire#220, nom_station#12, n_jours#221L, annees_couvertes#222, tx_max#242, tx_max_date#243]
+Input [9]: [station_id#0, mois_calendaire#220, nom_station#12, n_jours#221L, annees_couvertes#222, station_id#244, mois_calendaire#267, tx_max#242, tx_max_date#243]
+
+(25) InMemoryTableScan
+Output [4]: [date#274, qc_tn#278, station_id#273, tn#277]
+Arguments: [date#274, qc_tn#278, station_id#273, tn#277], [qc_tn#278 IN (OK,SUSPECT), isnotnull(station_id#273), isnotnull(month(date#274))]
+
+(26) InMemoryRelation
+Arguments: [station_id#273, nom_station#285, departement#286, latitude#287, longitude#288, date#274, tx#275, qc_tx#276, tn#277, qc_tn#278, rr#280, qc_rr#281], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(27) Filter
+Input [4]: [date#274, qc_tn#278, station_id#273, tn#277]
+Condition : ((qc_tn#278 IN (OK,SUSPECT) AND isnotnull(station_id#273)) AND isnotnull(month(date#274)))
+
+(28) Project
+Output [4]: [station_id#273, date#274, tn#277, month(date#274) AS mois_calendaire#296]
+Input [4]: [date#274, qc_tn#278, station_id#273, tn#277]
+
+(29) Sort
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [station_id#273 ASC NULLS FIRST, mois_calendaire#296 ASC NULLS FIRST, tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST], false, 0
+
+(30) WindowGroupLimit
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [station_id#273, mois_calendaire#296], [tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST], row_number(), 1, Partial
+
+(31) Exchange
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: hashpartitioning(station_id#273, mois_calendaire#296, 200), ENSURE_REQUIREMENTS, [plan_id=380]
+
+(32) Sort
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [station_id#273 ASC NULLS FIRST, mois_calendaire#296 ASC NULLS FIRST, tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST], false, 0
+
+(33) WindowGroupLimit
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [station_id#273, mois_calendaire#296], [tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST], row_number(), 1, Final
+
+(34) Window
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [row_number() windowspecdefinition(station_id#273, mois_calendaire#296, tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS _r#269], [station_id#273, mois_calendaire#296], [tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST]
+
+(35) Filter
+Input [5]: [station_id#273, date#274, tn#277, mois_calendaire#296, _r#269]
+Condition : (_r#269 = 1)
+
+(36) Project
+Output [4]: [station_id#273, mois_calendaire#296, tn#277 AS tn_min#271, date#274 AS tn_min_date#272]
+Input [5]: [station_id#273, date#274, tn#277, mois_calendaire#296, _r#269]
+
+(37) BroadcastExchange
+Input [4]: [station_id#273, mois_calendaire#296, tn_min#271, tn_min_date#272]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, int, true]),false), [plan_id=387]
+
+(38) BroadcastHashJoin
+Left keys [2]: [station_id#0, mois_calendaire#220]
+Right keys [2]: [station_id#273, mois_calendaire#296]
+Join type: LeftOuter
+Join condition: None
+
+(39) Project
+Output [9]: [station_id#0, mois_calendaire#220, nom_station#12, n_jours#221L, annees_couvertes#222, tx_max#242, tx_max_date#243, tn_min#271, tn_min_date#272]
+Input [11]: [station_id#0, mois_calendaire#220, nom_station#12, n_jours#221L, annees_couvertes#222, tx_max#242, tx_max_date#243, station_id#273, mois_calendaire#296, tn_min#271, tn_min_date#272]
+
+(40) InMemoryTableScan
+Output [4]: [date#303, qc_rr#310, rr#309, station_id#302]
+Arguments: [date#303, qc_rr#310, rr#309, station_id#302], [qc_rr#310 IN (OK,SUSPECT), isnotnull(station_id#302), isnotnull(month(date#303))]
+
+(41) InMemoryRelation
+Arguments: [station_id#302, nom_station#314, departement#315, latitude#316, longitude#317, date#303, tx#304, qc_tx#305, tn#306, qc_tn#307, rr#309, qc_rr#310], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(42) Filter
+Input [4]: [date#303, qc_rr#310, rr#309, station_id#302]
+Condition : ((qc_rr#310 IN (OK,SUSPECT) AND isnotnull(station_id#302)) AND isnotnull(month(date#303)))
+
+(43) Project
+Output [4]: [station_id#302, date#303, rr#309, month(date#303) AS mois_calendaire#325]
+Input [4]: [date#303, qc_rr#310, rr#309, station_id#302]
+
+(44) Sort
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [station_id#302 ASC NULLS FIRST, mois_calendaire#325 ASC NULLS FIRST, rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST], false, 0
+
+(45) WindowGroupLimit
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [station_id#302, mois_calendaire#325], [rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST], row_number(), 1, Partial
+
+(46) Exchange
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: hashpartitioning(station_id#302, mois_calendaire#325, 200), ENSURE_REQUIREMENTS, [plan_id=393]
+
+(47) Sort
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [station_id#302 ASC NULLS FIRST, mois_calendaire#325 ASC NULLS FIRST, rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST], false, 0
+
+(48) WindowGroupLimit
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [station_id#302, mois_calendaire#325], [rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST], row_number(), 1, Final
+
+(49) Window
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [row_number() windowspecdefinition(station_id#302, mois_calendaire#325, rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS _r#298], [station_id#302, mois_calendaire#325], [rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST]
+
+(50) Filter
+Input [5]: [station_id#302, date#303, rr#309, mois_calendaire#325, _r#298]
+Condition : (_r#298 = 1)
+
+(51) Project
+Output [4]: [station_id#302, mois_calendaire#325, rr#309 AS rr_max#300, date#303 AS rr_max_date#301]
+Input [5]: [station_id#302, date#303, rr#309, mois_calendaire#325, _r#298]
+
+(52) BroadcastExchange
+Input [4]: [station_id#302, mois_calendaire#325, rr_max#300, rr_max_date#301]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, int, true]),false), [plan_id=400]
+
+(53) BroadcastHashJoin
+Left keys [2]: [station_id#0, mois_calendaire#220]
+Right keys [2]: [station_id#302, mois_calendaire#325]
+Join type: LeftOuter
+Join condition: None
+
+(54) Project
+Output [11]: [station_id#0, mois_calendaire#220, nom_station#12, n_jours#221L, annees_couvertes#222, tx_max#242, tx_max_date#243, tn_min#271, tn_min_date#272, rr_max#300, rr_max_date#301]
+Input [13]: [station_id#0, mois_calendaire#220, nom_station#12, n_jours#221L, annees_couvertes#222, tx_max#242, tx_max_date#243, tn_min#271, tn_min_date#272, station_id#302, mois_calendaire#325, rr_max#300, rr_max_date#301]
+
+(55) AdaptiveSparkPlan
+Output [11]: [station_id#0, mois_calendaire#220, nom_station#12, n_jours#221L, annees_couvertes#222, tx_max#242, tx_max_date#243, tn_min#271, tn_min_date#272, rr_max#300, rr_max_date#301]
+Arguments: isFinalPlan=false
+
+
+
+====================================================================================================
+validation_records
+====================================================================================================
+== Physical Plan ==
+AdaptiveSparkPlan (79)
++- Project (78)
+   +- BroadcastHashJoin LeftOuter BuildRight (77)
+      :- Project (71)
+      :  +- BroadcastHashJoin LeftOuter BuildRight (70)
+      :     :- Project (64)
+      :     :  +- BroadcastHashJoin LeftOuter BuildRight (63)
+      :     :     :- Project (54)
+      :     :     :  +- BroadcastHashJoin LeftOuter BuildRight (53)
+      :     :     :     :- Project (39)
+      :     :     :     :  +- BroadcastHashJoin LeftOuter BuildRight (38)
+      :     :     :     :     :- Project (24)
+      :     :     :     :     :  +- BroadcastHashJoin LeftOuter BuildRight (23)
+      :     :     :     :     :     :- ObjectHashAggregate (9)
+      :     :     :     :     :     :  +- Exchange (8)
+      :     :     :     :     :     :     +- ObjectHashAggregate (7)
+      :     :     :     :     :     :        +- Project (6)
+      :     :     :     :     :     :           +- InMemoryTableScan (1)
+      :     :     :     :     :     :                 +- InMemoryRelation (2)
+      :     :     :     :     :     :                       +- * Project (5)
+      :     :     :     :     :     :                          +- * ColumnarToRow (4)
+      :     :     :     :     :     :                             +- Scan parquet  (3)
+      :     :     :     :     :     +- BroadcastExchange (22)
+      :     :     :     :     :        +- Project (21)
+      :     :     :     :     :           +- Filter (20)
+      :     :     :     :     :              +- Window (19)
+      :     :     :     :     :                 +- WindowGroupLimit (18)
+      :     :     :     :     :                    +- Sort (17)
+      :     :     :     :     :                       +- Exchange (16)
+      :     :     :     :     :                          +- WindowGroupLimit (15)
+      :     :     :     :     :                             +- Sort (14)
+      :     :     :     :     :                                +- Project (13)
+      :     :     :     :     :                                   +- Filter (12)
+      :     :     :     :     :                                      +- InMemoryTableScan (10)
+      :     :     :     :     :                                            +- InMemoryRelation (11)
+      :     :     :     :     :                                                  +- * Project (5)
+      :     :     :     :     :                                                     +- * ColumnarToRow (4)
+      :     :     :     :     :                                                        +- Scan parquet  (3)
+      :     :     :     :     +- BroadcastExchange (37)
+      :     :     :     :        +- Project (36)
+      :     :     :     :           +- Filter (35)
+      :     :     :     :              +- Window (34)
+      :     :     :     :                 +- WindowGroupLimit (33)
+      :     :     :     :                    +- Sort (32)
+      :     :     :     :                       +- Exchange (31)
+      :     :     :     :                          +- WindowGroupLimit (30)
+      :     :     :     :                             +- Sort (29)
+      :     :     :     :                                +- Project (28)
+      :     :     :     :                                   +- Filter (27)
+      :     :     :     :                                      +- InMemoryTableScan (25)
+      :     :     :     :                                            +- InMemoryRelation (26)
+      :     :     :     :                                                  +- * Project (5)
+      :     :     :     :                                                     +- * ColumnarToRow (4)
+      :     :     :     :                                                        +- Scan parquet  (3)
+      :     :     :     +- BroadcastExchange (52)
+      :     :     :        +- Project (51)
+      :     :     :           +- Filter (50)
+      :     :     :              +- Window (49)
+      :     :     :                 +- WindowGroupLimit (48)
+      :     :     :                    +- Sort (47)
+      :     :     :                       +- Exchange (46)
+      :     :     :                          +- WindowGroupLimit (45)
+      :     :     :                             +- Sort (44)
+      :     :     :                                +- Project (43)
+      :     :     :                                   +- Filter (42)
+      :     :     :                                      +- InMemoryTableScan (40)
+      :     :     :                                            +- InMemoryRelation (41)
+      :     :     :                                                  +- * Project (5)
+      :     :     :                                                     +- * ColumnarToRow (4)
+      :     :     :                                                        +- Scan parquet  (3)
+      :     :     +- BroadcastExchange (62)
+      :     :        +- Project (61)
+      :     :           +- Filter (60)
+      :     :              +- Window (59)
+      :     :                 +- Sort (58)
+      :     :                    +- Exchange (57)
+      :     :                       +- Filter (56)
+      :     :                          +- Scan parquet  (55)
+      :     +- BroadcastExchange (69)
+      :        +- Project (68)
+      :           +- Filter (67)
+      :              +- InMemoryTableScan (65)
+      :                    +- InMemoryRelation (66)
+      :                          +- * Project (5)
+      :                             +- * ColumnarToRow (4)
+      :                                +- Scan parquet  (3)
+      +- BroadcastExchange (76)
+         +- Project (75)
+            +- Filter (74)
+               +- InMemoryTableScan (72)
+                     +- InMemoryRelation (73)
+                           +- * Project (5)
+                              +- * ColumnarToRow (4)
+                                 +- Scan parquet  (3)
+
+
+(1) InMemoryTableScan
+Output [3]: [date#1, nom_station#12, station_id#0]
+Arguments: [date#1, nom_station#12, station_id#0]
+
+(2) InMemoryRelation
+Arguments: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(3) Scan parquet 
+Output [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+Batched: true
+Location: InMemoryFileIndex [file:/Users/sirinehamiche/Projets/Projet_architecture_big_data/climate-project/data/silver/observations_jour]
+ReadSchema: struct<station_id:string,date:date,tx:double,qc_tx:string,tn:double,qc_tn:string,rr:double,qc_rr:string,nom_station:string,departement:string,latitude:double,longitude:double>
+
+(4) ColumnarToRow [codegen id : 1]
+Input [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+
+(5) Project [codegen id : 1]
+Output [12]: [station_id#0, nom_station#12, departement#13, latitude#14, longitude#15, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8]
+Input [14]: [station_id#0, date#1, tx#2, qc_tx#3, tn#4, qc_tn#5, rr#7, qc_rr#8, nom_station#12, departement#13, latitude#14, longitude#15, annee#21, mois#22]
+
+(6) Project
+Output [4]: [station_id#0, nom_station#12, date#1, month(date#1) AS mois_calendaire#220]
+Input [3]: [date#1, nom_station#12, station_id#0]
+
+(7) ObjectHashAggregate
+Input [4]: [station_id#0, nom_station#12, date#1, mois_calendaire#220]
+Keys [3]: [station_id#0, mois_calendaire#220, nom_station#12]
+Functions [1]: [partial_collect_set(cast(year(date#1) as string), 0, 0)]
+Aggregate Attributes [1]: [buf#1783]
+Results [4]: [station_id#0, mois_calendaire#220, nom_station#12, buf#1785]
+
+(8) Exchange
+Input [4]: [station_id#0, mois_calendaire#220, nom_station#12, buf#1785]
+Arguments: hashpartitioning(station_id#0, mois_calendaire#220, nom_station#12, 200), ENSURE_REQUIREMENTS, [plan_id=590]
+
+(9) ObjectHashAggregate
+Input [4]: [station_id#0, mois_calendaire#220, nom_station#12, buf#1785]
+Keys [3]: [station_id#0, mois_calendaire#220, nom_station#12]
+Functions [1]: [collect_set(cast(year(date#1) as string), 0, 0)]
+Aggregate Attributes [1]: [collect_set(cast(year(date#1) as string), 0, 0)#237]
+Results [4]: [station_id#0, mois_calendaire#220, nom_station#12, concat_ws(,, array_sort(collect_set(cast(year(date#1) as string), 0, 0)#237, lambdafunction(if ((lambda left#238 < lambda right#239)) -1 else if ((lambda left#238 > lambda right#239)) 1 else 0, lambda left#238, lambda right#239, false), false)) AS annees_couvertes#222]
+
+(10) InMemoryTableScan
+Output [4]: [date#245, qc_tx#247, station_id#244, tx#246]
+Arguments: [date#245, qc_tx#247, station_id#244, tx#246], [qc_tx#247 IN (OK,SUSPECT), isnotnull(station_id#244), isnotnull(month(date#245))]
+
+(11) InMemoryRelation
+Arguments: [station_id#244, nom_station#256, departement#257, latitude#258, longitude#259, date#245, tx#246, qc_tx#247, tn#248, qc_tn#249, rr#251, qc_rr#252], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(12) Filter
+Input [4]: [date#245, qc_tx#247, station_id#244, tx#246]
+Condition : ((qc_tx#247 IN (OK,SUSPECT) AND isnotnull(station_id#244)) AND isnotnull(month(date#245)))
+
+(13) Project
+Output [4]: [station_id#244, date#245, tx#246, month(date#245) AS mois_calendaire#267]
+Input [4]: [date#245, qc_tx#247, station_id#244, tx#246]
+
+(14) Sort
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [station_id#244 ASC NULLS FIRST, mois_calendaire#267 ASC NULLS FIRST, tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST], false, 0
+
+(15) WindowGroupLimit
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [station_id#244, mois_calendaire#267], [tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST], row_number(), 1, Partial
+
+(16) Exchange
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: hashpartitioning(station_id#244, mois_calendaire#267, 200), ENSURE_REQUIREMENTS, [plan_id=595]
+
+(17) Sort
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [station_id#244 ASC NULLS FIRST, mois_calendaire#267 ASC NULLS FIRST, tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST], false, 0
+
+(18) WindowGroupLimit
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [station_id#244, mois_calendaire#267], [tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST], row_number(), 1, Final
+
+(19) Window
+Input [4]: [station_id#244, date#245, tx#246, mois_calendaire#267]
+Arguments: [row_number() windowspecdefinition(station_id#244, mois_calendaire#267, tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS _r#240], [station_id#244, mois_calendaire#267], [tx#246 DESC NULLS LAST, date#245 ASC NULLS FIRST]
+
+(20) Filter
+Input [5]: [station_id#244, date#245, tx#246, mois_calendaire#267, _r#240]
+Condition : (_r#240 = 1)
+
+(21) Project
+Output [3]: [station_id#244, mois_calendaire#267, tx#246 AS tx_max#242]
+Input [5]: [station_id#244, date#245, tx#246, mois_calendaire#267, _r#240]
+
+(22) BroadcastExchange
+Input [3]: [station_id#244, mois_calendaire#267, tx_max#242]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, int, true]),false), [plan_id=602]
+
+(23) BroadcastHashJoin
+Left keys [2]: [station_id#0, mois_calendaire#220]
+Right keys [2]: [station_id#244, mois_calendaire#267]
+Join type: LeftOuter
+Join condition: None
+
+(24) Project
+Output [5]: [station_id#0, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242]
+Input [7]: [station_id#0, mois_calendaire#220, nom_station#12, annees_couvertes#222, station_id#244, mois_calendaire#267, tx_max#242]
+
+(25) InMemoryTableScan
+Output [4]: [date#274, qc_tn#278, station_id#273, tn#277]
+Arguments: [date#274, qc_tn#278, station_id#273, tn#277], [qc_tn#278 IN (OK,SUSPECT), isnotnull(station_id#273), isnotnull(month(date#274))]
+
+(26) InMemoryRelation
+Arguments: [station_id#273, nom_station#285, departement#286, latitude#287, longitude#288, date#274, tx#275, qc_tx#276, tn#277, qc_tn#278, rr#280, qc_rr#281], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(27) Filter
+Input [4]: [date#274, qc_tn#278, station_id#273, tn#277]
+Condition : ((qc_tn#278 IN (OK,SUSPECT) AND isnotnull(station_id#273)) AND isnotnull(month(date#274)))
+
+(28) Project
+Output [4]: [station_id#273, date#274, tn#277, month(date#274) AS mois_calendaire#296]
+Input [4]: [date#274, qc_tn#278, station_id#273, tn#277]
+
+(29) Sort
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [station_id#273 ASC NULLS FIRST, mois_calendaire#296 ASC NULLS FIRST, tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST], false, 0
+
+(30) WindowGroupLimit
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [station_id#273, mois_calendaire#296], [tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST], row_number(), 1, Partial
+
+(31) Exchange
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: hashpartitioning(station_id#273, mois_calendaire#296, 200), ENSURE_REQUIREMENTS, [plan_id=608]
+
+(32) Sort
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [station_id#273 ASC NULLS FIRST, mois_calendaire#296 ASC NULLS FIRST, tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST], false, 0
+
+(33) WindowGroupLimit
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [station_id#273, mois_calendaire#296], [tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST], row_number(), 1, Final
+
+(34) Window
+Input [4]: [station_id#273, date#274, tn#277, mois_calendaire#296]
+Arguments: [row_number() windowspecdefinition(station_id#273, mois_calendaire#296, tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS _r#269], [station_id#273, mois_calendaire#296], [tn#277 ASC NULLS FIRST, date#274 ASC NULLS FIRST]
+
+(35) Filter
+Input [5]: [station_id#273, date#274, tn#277, mois_calendaire#296, _r#269]
+Condition : (_r#269 = 1)
+
+(36) Project
+Output [3]: [station_id#273, mois_calendaire#296, tn#277 AS tn_min#271]
+Input [5]: [station_id#273, date#274, tn#277, mois_calendaire#296, _r#269]
+
+(37) BroadcastExchange
+Input [3]: [station_id#273, mois_calendaire#296, tn_min#271]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, int, true]),false), [plan_id=615]
+
+(38) BroadcastHashJoin
+Left keys [2]: [station_id#0, mois_calendaire#220]
+Right keys [2]: [station_id#273, mois_calendaire#296]
+Join type: LeftOuter
+Join condition: None
+
+(39) Project
+Output [6]: [station_id#0, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, tn_min#271]
+Input [8]: [station_id#0, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, station_id#273, mois_calendaire#296, tn_min#271]
+
+(40) InMemoryTableScan
+Output [4]: [date#303, qc_rr#310, rr#309, station_id#302]
+Arguments: [date#303, qc_rr#310, rr#309, station_id#302], [qc_rr#310 IN (OK,SUSPECT), isnotnull(station_id#302), isnotnull(month(date#303))]
+
+(41) InMemoryRelation
+Arguments: [station_id#302, nom_station#314, departement#315, latitude#316, longitude#317, date#303, tx#304, qc_tx#305, tn#306, qc_tn#307, rr#309, qc_rr#310], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(42) Filter
+Input [4]: [date#303, qc_rr#310, rr#309, station_id#302]
+Condition : ((qc_rr#310 IN (OK,SUSPECT) AND isnotnull(station_id#302)) AND isnotnull(month(date#303)))
+
+(43) Project
+Output [4]: [station_id#302, date#303, rr#309, month(date#303) AS mois_calendaire#325]
+Input [4]: [date#303, qc_rr#310, rr#309, station_id#302]
+
+(44) Sort
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [station_id#302 ASC NULLS FIRST, mois_calendaire#325 ASC NULLS FIRST, rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST], false, 0
+
+(45) WindowGroupLimit
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [station_id#302, mois_calendaire#325], [rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST], row_number(), 1, Partial
+
+(46) Exchange
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: hashpartitioning(station_id#302, mois_calendaire#325, 200), ENSURE_REQUIREMENTS, [plan_id=621]
+
+(47) Sort
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [station_id#302 ASC NULLS FIRST, mois_calendaire#325 ASC NULLS FIRST, rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST], false, 0
+
+(48) WindowGroupLimit
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [station_id#302, mois_calendaire#325], [rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST], row_number(), 1, Final
+
+(49) Window
+Input [4]: [station_id#302, date#303, rr#309, mois_calendaire#325]
+Arguments: [row_number() windowspecdefinition(station_id#302, mois_calendaire#325, rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS _r#298], [station_id#302, mois_calendaire#325], [rr#309 DESC NULLS LAST, date#303 ASC NULLS FIRST]
+
+(50) Filter
+Input [5]: [station_id#302, date#303, rr#309, mois_calendaire#325, _r#298]
+Condition : (_r#298 = 1)
+
+(51) Project
+Output [2]: [station_id#302, mois_calendaire#325]
+Input [5]: [station_id#302, date#303, rr#309, mois_calendaire#325, _r#298]
+
+(52) BroadcastExchange
+Input [2]: [station_id#302, mois_calendaire#325]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, int, true]),false), [plan_id=628]
+
+(53) BroadcastHashJoin
+Left keys [2]: [station_id#0, mois_calendaire#220]
+Right keys [2]: [station_id#302, mois_calendaire#325]
+Join type: LeftOuter
+Join condition: None
+
+(54) Project
+Output [6]: [station_id#0, nom_station#12, mois_calendaire#220, annees_couvertes#222, tx_max#242, tn_min#271]
+Input [8]: [station_id#0, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, tn_min#271, station_id#302, mois_calendaire#325]
+
+(55) Scan parquet 
+Output [7]: [ic_id#384, mois_calendaire#386, tnn_min#390, tnn_min_date#391, txx_max#396, txx_max_date#397, _batch_id#408]
+Batched: true
+Location: InMemoryFileIndex [file:/Users/sirinehamiche/Projets/Projet_architecture_big_data/climate-project/data/bronze/v2_records]
+PushedFilters: [IsNotNull(ic_id)]
+ReadSchema: struct<ic_id:string,mois_calendaire:string,tnn_min:string,tnn_min_date:string,txx_max:string,txx_max_date:string>
+
+(56) Filter
+Input [7]: [ic_id#384, mois_calendaire#386, tnn_min#390, tnn_min_date#391, txx_max#396, txx_max_date#397, _batch_id#408]
+Condition : isnotnull(ic_id#384)
+
+(57) Exchange
+Input [7]: [ic_id#384, mois_calendaire#386, tnn_min#390, tnn_min_date#391, txx_max#396, txx_max_date#397, _batch_id#408]
+Arguments: hashpartitioning(ic_id#384, 200), ENSURE_REQUIREMENTS, [plan_id=631]
+
+(58) Sort
+Input [7]: [ic_id#384, mois_calendaire#386, tnn_min#390, tnn_min_date#391, txx_max#396, txx_max_date#397, _batch_id#408]
+Arguments: [ic_id#384 ASC NULLS FIRST], false, 0
+
+(59) Window
+Input [7]: [ic_id#384, mois_calendaire#386, tnn_min#390, tnn_min_date#391, txx_max#396, txx_max_date#397, _batch_id#408]
+Arguments: [max(_batch_id#408) windowspecdefinition(ic_id#384, specifiedwindowframe(RowFrame, unboundedpreceding$(), unboundedfollowing$())) AS _dernier#410], [ic_id#384]
+
+(60) Filter
+Input [8]: [ic_id#384, mois_calendaire#386, tnn_min#390, tnn_min_date#391, txx_max#396, txx_max_date#397, _batch_id#408, _dernier#410]
+Condition : (((isnotnull(_batch_id#408) AND isnotnull(_dernier#410)) AND (_batch_id#408 = _dernier#410)) AND isnotnull(cast(mois_calendaire#386 as int)))
+
+(61) Project
+Output [6]: [ic_id#384 AS station_id#412, cast(mois_calendaire#386 as int) AS mois_calendaire#413, cast(txx_max#396 as double) AS api_tx_max#414, cast(txx_max_date#397 as date) AS api_tx_max_date#415, cast(tnn_min#390 as double) AS api_tn_min#416, cast(tnn_min_date#391 as date) AS api_tn_min_date#417]
+Input [8]: [ic_id#384, mois_calendaire#386, tnn_min#390, tnn_min_date#391, txx_max#396, txx_max_date#397, _batch_id#408, _dernier#410]
+
+(62) BroadcastExchange
+Input [6]: [station_id#412, mois_calendaire#413, api_tx_max#414, api_tx_max_date#415, api_tn_min#416, api_tn_min_date#417]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, int, true]),false), [plan_id=637]
+
+(63) BroadcastHashJoin
+Left keys [2]: [station_id#0, mois_calendaire#220]
+Right keys [2]: [station_id#412, mois_calendaire#413]
+Join type: LeftOuter
+Join condition: None
+
+(64) Project
+Output [10]: [station_id#0, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, tn_min#271, api_tx_max#414, api_tx_max_date#415, api_tn_min#416, api_tn_min_date#417]
+Input [12]: [station_id#0, nom_station#12, mois_calendaire#220, annees_couvertes#222, tx_max#242, tn_min#271, station_id#412, mois_calendaire#413, api_tx_max#414, api_tx_max_date#415, api_tn_min#416, api_tn_min_date#417]
+
+(65) InMemoryTableScan
+Output [3]: [date#423, station_id#422, tx#424]
+Arguments: [date#423, station_id#422, tx#424], [isnotnull(station_id#422), isnotnull(date#423)]
+
+(66) InMemoryRelation
+Arguments: [station_id#422, nom_station#434, departement#435, latitude#436, longitude#437, date#423, tx#424, qc_tx#425, tn#426, qc_tn#427, rr#429, qc_rr#430], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(67) Filter
+Input [3]: [date#423, station_id#422, tx#424]
+Condition : (isnotnull(station_id#422) AND isnotnull(date#423))
+
+(68) Project
+Output [3]: [station_id#422, date#423 AS api_tx_max_date#418, tx#424 AS notre_tx_ce_jour#419]
+Input [3]: [date#423, station_id#422, tx#424]
+
+(69) BroadcastExchange
+Input [3]: [station_id#422, api_tx_max_date#418, notre_tx_ce_jour#419]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, date, true]),false), [plan_id=641]
+
+(70) BroadcastHashJoin
+Left keys [2]: [station_id#0, api_tx_max_date#415]
+Right keys [2]: [station_id#422, api_tx_max_date#418]
+Join type: LeftOuter
+Join condition: None
+
+(71) Project
+Output [11]: [station_id#0, api_tx_max_date#415, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, tn_min#271, api_tx_max#414, api_tn_min#416, api_tn_min_date#417, notre_tx_ce_jour#419]
+Input [13]: [station_id#0, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, tn_min#271, api_tx_max#414, api_tx_max_date#415, api_tn_min#416, api_tn_min_date#417, station_id#422, api_tx_max_date#418, notre_tx_ce_jour#419]
+
+(72) InMemoryTableScan
+Output [3]: [date#447, station_id#446, tn#450]
+Arguments: [date#447, station_id#446, tn#450], [isnotnull(station_id#446), isnotnull(date#447)]
+
+(73) InMemoryRelation
+Arguments: [station_id#446, nom_station#458, departement#459, latitude#460, longitude#461, date#447, tx#448, qc_tx#449, tn#450, qc_tn#451, rr#453, qc_rr#454], StorageLevel(disk, memory, deserialized, 1 replicas)
+
+(74) Filter
+Input [3]: [date#447, station_id#446, tn#450]
+Condition : (isnotnull(station_id#446) AND isnotnull(date#447))
+
+(75) Project
+Output [3]: [station_id#446, date#447 AS api_tn_min_date#420, tn#450 AS notre_tn_ce_jour#421]
+Input [3]: [date#447, station_id#446, tn#450]
+
+(76) BroadcastExchange
+Input [3]: [station_id#446, api_tn_min_date#420, notre_tn_ce_jour#421]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, true], input[1, date, true]),false), [plan_id=645]
+
+(77) BroadcastHashJoin
+Left keys [2]: [station_id#0, api_tn_min_date#417]
+Right keys [2]: [station_id#446, api_tn_min_date#420]
+Join type: LeftOuter
+Join condition: None
+
+(78) Project
+Output [16]: [station_id#0, api_tn_min_date#417, api_tx_max_date#415, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, tn_min#271, api_tx_max#414, api_tn_min#416, notre_tx_ce_jour#419, notre_tn_ce_jour#421, CASE WHEN (isnull(tx_max#242) OR isnull(api_tx_max#414)) THEN NA WHEN (tx_max#242 <= (api_tx_max#414 + 0.05)) THEN OK ELSE KO END AS coherence_tx#470, CASE WHEN (isnull(tn_min#271) OR isnull(api_tn_min#416)) THEN NA WHEN (tn_min#271 >= (api_tn_min#416 - 0.05)) THEN OK ELSE KO END AS coherence_tn#471, CASE WHEN (isnull(notre_tx_ce_jour#419) OR isnull(api_tx_max#414)) THEN NA WHEN (abs((notre_tx_ce_jour#419 - api_tx_max#414)) <= 0.05) THEN OK ELSE KO END AS concordance_tx#472, CASE WHEN (isnull(notre_tn_ce_jour#421) OR isnull(api_tn_min#416)) THEN NA WHEN (abs((notre_tn_ce_jour#421 - api_tn_min#416)) <= 0.05) THEN OK ELSE KO END AS concordance_tn#473]
+Input [14]: [station_id#0, api_tx_max_date#415, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, tn_min#271, api_tx_max#414, api_tn_min#416, api_tn_min_date#417, notre_tx_ce_jour#419, station_id#446, api_tn_min_date#420, notre_tn_ce_jour#421]
+
+(79) AdaptiveSparkPlan
+Output [16]: [station_id#0, api_tn_min_date#417, api_tx_max_date#415, mois_calendaire#220, nom_station#12, annees_couvertes#222, tx_max#242, tn_min#271, api_tx_max#414, api_tn_min#416, notre_tx_ce_jour#419, notre_tn_ce_jour#421, coherence_tx#470, coherence_tn#471, concordance_tx#472, concordance_tn#473]
+Arguments: isFinalPlan=false
+
+
+
